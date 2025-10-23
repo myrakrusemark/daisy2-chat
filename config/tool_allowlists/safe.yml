@@ -1,0 +1,22 @@
+# Safe tool allowlist - Conservative permissions for untrusted environments
+
+allowed_tools:
+  # File reading (safe, read-only operations)
+  - Read
+  - Glob
+  - Grep
+
+  # Basic file operations (limited risk)
+  - Edit
+  - Write
+
+description: |
+  Safe configuration for untrusted environments.
+  Allows file reading and basic editing, but no command execution or external access.
+
+permission_mode: requireApproval
+
+use_cases:
+  - Testing new prompts
+  - Exploratory code reading
+  - Documentation generation

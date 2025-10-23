@@ -1,0 +1,36 @@
+# Full tool allowlist - Complete access for trusted voice assistant usage
+
+allowed_tools:
+  # File operations
+  - Read
+  - Write
+  - Edit
+  - Glob
+  - Grep
+  - LSTool
+
+  # Command execution
+  - Bash
+
+  # Web access
+  - WebFetch
+  - WebSearch
+
+  # Custom tools (if available)
+  - "Hass*"  # Home Assistant tools
+  - GetLiveContext
+  - todo_get_items
+  - read_file
+  - read_text_file
+
+description: |
+  Full access configuration for trusted voice assistant usage.
+  Includes all file operations, command execution, and web access.
+  Use with caution - only enable in trusted, isolated environments.
+
+permission_mode: bypassPermissions
+
+use_cases:
+  - Personal voice assistant
+  - Automated coding tasks
+  - System administration

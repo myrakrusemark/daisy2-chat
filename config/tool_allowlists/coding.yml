@@ -1,0 +1,31 @@
+# Coding tool allowlist - Balanced permissions for development work
+
+allowed_tools:
+  # File operations
+  - Read
+  - Write
+  - Edit
+  - Glob
+  - Grep
+  - LSTool
+  - Replace
+
+  # Command execution (for running tests, builds, etc.)
+  - Bash
+
+  # Web access for documentation lookup
+  - WebFetch
+  - WebSearch
+
+description: |
+  Balanced configuration for coding and development work.
+  Allows file operations, command execution for dev tools, and web access.
+  Good for general programming assistance.
+
+permission_mode: bypassPermissions
+
+use_cases:
+  - Software development
+  - Code refactoring
+  - Running tests and builds
+  - Documentation research
