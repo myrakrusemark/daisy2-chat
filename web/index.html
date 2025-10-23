@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Claude Assistant</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <h1>Claude Assistant</h1>
+                <div class="session-info">
+                    <span id="session-id" class="session-badge">Connecting...</span>
+                    <span id="connection-status" class="status-indicator connecting"></span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main">
+            <!-- Conversation Display -->
+            <div class="conversation-container">
+                <div id="conversation" class="conversation">
+                    <div class="welcome-message">
+                        <h2>Welcome to Claude Assistant</h2>
+                        <p>Click one of the activation modes below to start</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Controls -->
+            <div class="controls">
+                <!-- Activation Mode Selector -->
+                <div class="activation-modes">
+                    <button id="btn-push-to-talk" class="mode-btn" title="Hold to speak">
+                        <span class="icon">🎤</span>
+                        <span class="label">Push to Talk</span>
+                    </button>
+                    <button id="btn-click-to-activate" class="mode-btn" title="Click to activate">
+                        <span class="icon">🔴</span>
+                        <span class="label">Click to Activate</span>
+                    </button>
+                    <button id="btn-wake-word" class="mode-btn disabled" title="Wake word (Coming soon)" disabled>
+                        <span class="icon">👂</span>
+                        <span class="label">Wake Word</span>
+                    </button>
+                </div>
+
+                <!-- Status Display -->
+                <div id="status-display" class="status-display">
+                    Ready to assist
+                </div>
+
+                <!-- Audio Visualizer -->
+                <div id="audio-visualizer" class="audio-visualizer hidden">
+                    <div class="waveform">
+                        <div class="bar"></div>
+                        <div class="bar"></div>
+                        <div class="bar"></div>
+                        <div class="bar"></div>
+                        <div class="bar"></div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Settings Panel (Collapsible) -->
+        <aside class="settings-panel collapsed">
+            <button id="btn-toggle-settings" class="settings-toggle">⚙️ Settings</button>
+
+            <div class="settings-content">
+                <!-- Working Directory -->
+                <div class="setting-group">
+                    <label for="working-directory">Working Directory</label>
+                    <input
+                        type="text"
+                        id="working-directory"
+                        placeholder="/app/sandbox"
+                        value="/app/sandbox"
+                    >
+                    <small>Path where Claude will operate</small>
+                </div>
+
+                <!-- Tool Allowlist Profile -->
+                <div class="setting-group">
+                    <label for="tool-profile">Tool Profile</label>
+                    <select id="tool-profile">
+                        <option value="safe">Safe (Read-only)</option>
+                        <option value="coding" selected>Coding (Balanced)</option>
+                        <option value="full">Full (All tools)</option>
+                    </select>
+                </div>
+
+                <!-- Permission Mode -->
+                <div class="setting-group">
+                    <label for="permission-mode">Permission Mode</label>
+                    <select id="permission-mode">
+                        <option value="bypassPermissions" selected>Bypass (Auto-approve)</option>
+                        <option value="requireApproval">Require Approval</option>
+                    </select>
+                </div>
+
+                <!-- Voice Selection -->
+                <div class="setting-group">
+                    <label for="voice-select">TTS Voice</label>
+                    <select id="voice-select">
+                        <option value="">Loading voices...</option>
+                    </select>
+                </div>
+
+                <!-- Speech Rate -->
+                <div class="setting-group">
+                    <label for="speech-rate">Speech Rate: <span id="rate-value">1.3</span>x</label>
+                    <input
+                        type="range"
+                        id="speech-rate"
+                        min="0.5"
+                        max="2.0"
+                        step="0.1"
+                        value="1.3"
+                    >
+                </div>
+
+                <!-- Sound Effects Toggle -->
+                <div class="setting-group">
+                    <label>
+                        <input type="checkbox" id="enable-sounds" checked>
+                        Enable sound effects
+                    </label>
+                </div>
+
+                <!-- Session Management -->
+                <div class="setting-group">
+                    <button id="btn-new-session" class="btn-secondary">New Session</button>
+                    <button id="btn-clear-conversation" class="btn-secondary">Clear Conversation</button>
+                </div>
+            </div>
+        </aside>
+    </div>
+
+    <!-- Browser Compatibility Warning -->
+    <div id="browser-warning" class="browser-warning hidden">
+        <div class="warning-content">
+            <h3>⚠️ Browser Compatibility Notice</h3>
+            <p id="browser-warning-text"></p>
+            <button id="btn-dismiss-warning">Continue Anyway</button>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="/static/js/audio.js"></script>
+    <script src="/static/js/websocket.js"></script>
+    <script src="/static/js/ui-components.js"></script>
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

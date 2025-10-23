@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  cassistant:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: claude-assistant
+    ports:
+      - "8000:8000"
+    environment:
+      # Required
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+
+      # Optional - Picovoice for wake word (browser-based)
+      - PICOVOICE_ACCESS_KEY=${PICOVOICE_ACCESS_KEY:-}
+
+      # Server configuration
+      - HOST=0.0.0.0
+      - PORT=8000
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - RELOAD=${RELOAD:-false}
+
+      # Session management
+      - MAX_SESSIONS=${MAX_SESSIONS:-10}
+      - SESSION_TIMEOUT=${SESSION_TIMEOUT:-3600}
+
+      # Working directory configuration
+      - DEFAULT_WORKSPACE=/app/sandbox
+      - ALLOWED_WORKSPACE_PATHS=/app/sandbox,/app/data/custom
+
+    volumes:
+      # Persist conversation history
+      - ./data/conversations:/app/data/conversations
+
+      # Persist sandbox workspace (optional)
+      - ./sandbox:/app/sandbox
+
+      # Custom workspace (optional)
+      - ./data/custom:/app/data/custom
+
+    restart: unless-stopped
+
+    # Resource limits (optional)
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 512M
