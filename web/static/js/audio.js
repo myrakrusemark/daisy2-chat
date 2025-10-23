@@ -17,6 +17,9 @@ class AudioManager {
             this.recognition.lang = 'en-US';
         }
 
+        // Track recognition state
+        this.isRecognitionActive = false;
+
         // Speech Synthesis (TTS)
         this.synthesis = window.speechSynthesis;
         this.voices = [];
@@ -135,9 +138,15 @@ class AudioManager {
 
         this.recognition.onend = () => {
             console.log('Speech recognition ended');
+            this.isRecognitionActive = false;
             if (this.onEnd) {
                 this.onEnd();
             }
+        };
+
+        this.recognition.onstart = () => {
+            console.log('Speech recognition started');
+            this.isRecognitionActive = true;
         };
     }
 
@@ -150,12 +159,38 @@ class AudioManager {
             return false;
         }
 
+        // If already active, stop first
+        if (this.isRecognitionActive) {
+            console.log('Recognition already active, stopping first...');
+            this.recognition.stop();
+            // Wait a bit before restarting
+            setTimeout(() => {
+                this._attemptStart();
+            }, 100);
+            return true;
+        }
+
+        return this._attemptStart();
+    }
+
+    /**
+     * Internal method to attempt starting recognition
+     */
+    _attemptStart() {
         try {
             this.recognition.start();
             this.playSound('wake');
             return true;
         } catch (error) {
             console.error('Error starting recognition:', error);
+            // If it fails because already started, stop and retry
+            if (error.message && error.message.includes('already started')) {
+                this.recognition.stop();
+                setTimeout(() => {
+                    this._attemptStart();
+                }, 100);
+                return true;
+            }
             return false;
         }
     }

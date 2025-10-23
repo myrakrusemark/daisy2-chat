@@ -165,10 +165,13 @@ class ClaudeAssistant {
 
         // Activation mode buttons
         document.getElementById('btn-push-to-talk').addEventListener('mousedown', () => {
-            if (!this.isProcessing) {
-                this.setActivationMode('push-to-talk');
-                this.startListening();
+            // Allow interrupting TTS by stopping synthesis
+            if (this.isProcessing) {
+                this.audio.synthesis.cancel();
+                this.isProcessing = false;
             }
+            this.setActivationMode('push-to-talk');
+            this.startListening();
         });
 
         document.getElementById('btn-push-to-talk').addEventListener('mouseup', () => {
@@ -178,7 +181,11 @@ class ClaudeAssistant {
         });
 
         document.getElementById('btn-click-to-activate').addEventListener('click', () => {
-            if (this.isProcessing) return;
+            // Allow interrupting TTS by stopping synthesis
+            if (this.isProcessing) {
+                this.audio.synthesis.cancel();
+                this.isProcessing = false;
+            }
 
             if (this.activationMode === 'click-to-activate' && this.isListening) {
                 this.stopListening();
