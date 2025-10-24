@@ -149,6 +149,9 @@ class ClaudeAssistant {
                 console.log('Finished speaking');
                 this.ui.setStatus('Ready to assist');
                 this.isProcessing = false;
+
+                // Play sleep sound to indicate returning to idle state
+                this.audio.playSound('sleep');
             });
         };
 
@@ -248,21 +251,6 @@ class ClaudeAssistant {
             }
         });
 
-        document.getElementById('btn-click-to-activate').addEventListener('click', () => {
-            // Allow interrupting TTS by stopping speech
-            if (this.isProcessing) {
-                this.audio.stopSpeaking();
-                this.isProcessing = false;
-            }
-
-            if (this.activationMode === 'click-to-activate' && this.isListening) {
-                this.stopListening();
-            } else {
-                this.setActivationMode('click-to-activate');
-                this.startListening();
-            }
-        });
-
         document.getElementById('btn-wake-word').addEventListener('click', () => {
             if (this.activationMode === 'wake-word') {
                 // Stop wake word mode
@@ -305,8 +293,6 @@ class ClaudeAssistant {
 
         if (mode === 'push-to-talk') {
             document.getElementById('btn-push-to-talk').classList.add('active');
-        } else if (mode === 'click-to-activate') {
-            document.getElementById('btn-click-to-activate').classList.add('active');
         } else if (mode === 'wake-word') {
             document.getElementById('btn-wake-word').classList.add('active');
         }
@@ -318,17 +304,14 @@ class ClaudeAssistant {
     startListening() {
         if (this.isListening) return;
 
-        const success = this.audio.startListening();
+        const success = this.audio.startListening(this.activationMode);
         if (success) {
             this.isListening = true;
             this.ui.setStatus('Listening... speak now');
-            this.ui.setVisualizerActive(true);
 
             // Update mode button
             if (this.activationMode === 'push-to-talk') {
                 document.getElementById('btn-push-to-talk').classList.add('listening');
-            } else if (this.activationMode === 'click-to-activate') {
-                document.getElementById('btn-click-to-activate').classList.add('listening');
             }
         }
     }
@@ -341,7 +324,6 @@ class ClaudeAssistant {
 
         this.audio.stopListening();
         this.isListening = false;
-        this.ui.setVisualizerActive(false);
 
         // Update mode button
         document.querySelectorAll('.mode-btn').forEach(btn => {
@@ -412,7 +394,6 @@ class ClaudeAssistant {
 
         // Update UI to ready state
         this.ui.setStatus('Ready to assist');
-        this.ui.setVisualizerActive(false);
     }
 
     /**

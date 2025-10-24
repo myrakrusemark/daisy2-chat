@@ -9,7 +9,6 @@ class UIComponents {
         this.statusEl = document.getElementById('status-display');
         this.sessionIdEl = document.getElementById('session-id');
         this.connectionStatusEl = document.getElementById('connection-status');
-        this.audioVisualizerEl = document.getElementById('audio-visualizer');
 
         // Settings elements
         this.settingsPanelEl = document.querySelector('.settings-panel');
@@ -128,17 +127,6 @@ class UIComponents {
      */
     setConnectionStatus(status) {
         this.connectionStatusEl.className = `status-indicator ${status}`;
-    }
-
-    /**
-     * Show/hide audio visualizer
-     */
-    setVisualizerActive(active) {
-        if (active) {
-            this.audioVisualizerEl.classList.remove('hidden');
-        } else {
-            this.audioVisualizerEl.classList.add('hidden');
-        }
     }
 
     /**

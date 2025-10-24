@@ -20,6 +20,9 @@ class AudioManager {
         // Track recognition state
         this.isRecognitionActive = false;
         this.accumulatedTranscript = '';  // Buffer to accumulate transcript
+        this.currentMode = null;  // Track activation mode (push-to-talk or wake-word)
+        this.silenceTimer = null;  // Timer for auto-stopping after silence
+        this.silenceTimeout = 2000;  // 2 seconds of silence before auto-stop
 
         // Audio playback for streamed TTS
         this.audioContext = null;
@@ -89,6 +92,14 @@ class AudioManager {
                 this.accumulatedTranscript = completeTranscript.trim();
             }
 
+            // For wake-word mode: start/reset silence timer on ANY speech (final or interim)
+            if (this.currentMode === 'wake-word' && (completeTranscript || interimTranscript)) {
+                this.clearSilenceTimer();
+                this.silenceTimer = setTimeout(() => {
+                    this.stopListening();
+                }, this.silenceTimeout);
+            }
+
             // Show interim results for user feedback
             if (interimTranscript && this.onInterimTranscript) {
                 const displayText = this.accumulatedTranscript + ' ' + interimTranscript;
@@ -132,12 +143,19 @@ class AudioManager {
 
     /**
      * Start listening for speech
+     * @param {string} mode - Activation mode ('push-to-talk' or 'wake-word')
      */
-    startListening() {
+    startListening(mode = 'push-to-talk') {
         if (!this.recognition) {
             console.error('Speech recognition not available');
             return false;
         }
+
+        // Store the current mode
+        this.currentMode = mode;
+
+        // Clear any existing silence timer
+        this.clearSilenceTimer();
 
         // If already active, stop first
         if (this.isRecognitionActive) {
@@ -179,8 +197,21 @@ class AudioManager {
      * Stop listening
      */
     stopListening() {
+        // Clear silence timer
+        this.clearSilenceTimer();
+
         if (this.recognition) {
             this.recognition.stop();
+        }
+    }
+
+    /**
+     * Clear the silence detection timer
+     */
+    clearSilenceTimer() {
+        if (this.silenceTimer) {
+            clearTimeout(this.silenceTimer);
+            this.silenceTimer = null;
         }
     }
 
