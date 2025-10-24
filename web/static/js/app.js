@@ -9,6 +9,7 @@ class ClaudeAssistant {
         this.ui = new UIComponents();
         this.ws = null;
         this.sessionId = null;
+        this.wakeWord = null;
 
         // Activation mode state
         this.activationMode = null; // 'push-to-talk', 'click-to-activate', 'wake-word'
@@ -103,14 +104,10 @@ class ClaudeAssistant {
         };
 
         this.ws.onAssistantMessage = (content, toolCalls) => {
-            console.log('Assistant message:', content);
+            console.log('Assistant message received:', content);
+            console.log('Tool calls:', toolCalls);
             this.ui.addAssistantMessage(content, toolCalls);
-
-            // Speak response
-            this.audio.speak(content, () => {
-                this.ui.setStatus('Ready to assist');
-                this.isProcessing = false;
-            });
+            // TTS will be handled by separate TTS callbacks
         };
 
         this.ws.onToolUse = (toolName, toolInput, summary) => {
@@ -134,6 +131,25 @@ class ClaudeAssistant {
             console.error('WebSocket error:', errorMessage);
             this.ui.setStatus(`Error: ${errorMessage}`, 'error');
             this.isProcessing = false;
+        };
+
+        // TTS streaming callbacks
+        this.ws.onTTSStart = (text) => {
+            console.log('TTS stream starting');
+            this.audio.startTTSStream();
+        };
+
+        this.ws.onTTSAudio = (audioData) => {
+            this.audio.addTTSChunk(audioData);
+        };
+
+        this.ws.onTTSEnd = () => {
+            console.log('TTS stream complete, playing audio');
+            this.audio.playTTSStream(() => {
+                console.log('Finished speaking');
+                this.ui.setStatus('Ready to assist');
+                this.isProcessing = false;
+            });
         };
 
         // Connect
@@ -161,13 +177,65 @@ class ClaudeAssistant {
 
         this.audio.onEnd = () => {
             this.stopListening();
+
+            // If in wake word mode, restart wake word listening after command completes
+            if (this.activationMode === 'wake-word' && this.wakeWord) {
+                setTimeout(() => {
+                    this.wakeWord.startListening();
+                    this.ui.setStatus('Listening for wake word: "computer"');
+                }, 1000);
+            }
         };
+
+        // Spacebar push-to-talk and ESC to stop
+        document.addEventListener('keydown', (e) => {
+            // Ignore if typing in an input field
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+                return;
+            }
+
+            // ESC to stop any current process
+            if (e.code === 'Escape') {
+                e.preventDefault();
+                this.stopAllProcesses();
+                return;
+            }
+
+            // Spacebar for push-to-talk
+            if (e.code === 'Space' && !e.repeat) {
+                e.preventDefault();
+
+                // Allow interrupting TTS by stopping speech
+                if (this.isProcessing) {
+                    this.audio.stopSpeaking();
+                    this.isProcessing = false;
+                }
+
+                this.setActivationMode('push-to-talk');
+                this.startListening();
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            // Ignore if typing in an input field
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+                return;
+            }
+
+            // Spacebar release
+            if (e.code === 'Space') {
+                e.preventDefault();
+                if (this.activationMode === 'push-to-talk' && this.isListening) {
+                    this.stopListening();
+                }
+            }
+        });
 
         // Activation mode buttons
         document.getElementById('btn-push-to-talk').addEventListener('mousedown', () => {
-            // Allow interrupting TTS by stopping synthesis
+            // Allow interrupting TTS by stopping speech
             if (this.isProcessing) {
-                this.audio.synthesis.cancel();
+                this.audio.stopSpeaking();
                 this.isProcessing = false;
             }
             this.setActivationMode('push-to-talk');
@@ -181,9 +249,9 @@ class ClaudeAssistant {
         });
 
         document.getElementById('btn-click-to-activate').addEventListener('click', () => {
-            // Allow interrupting TTS by stopping synthesis
+            // Allow interrupting TTS by stopping speech
             if (this.isProcessing) {
-                this.audio.synthesis.cancel();
+                this.audio.stopSpeaking();
                 this.isProcessing = false;
             }
 
@@ -195,17 +263,17 @@ class ClaudeAssistant {
             }
         });
 
+        document.getElementById('btn-wake-word').addEventListener('click', () => {
+            if (this.activationMode === 'wake-word') {
+                // Stop wake word mode
+                this.stopWakeWord();
+            } else {
+                // Start wake word mode
+                this.startWakeWord();
+            }
+        });
+
         // Settings
-        document.getElementById('voice-select').addEventListener('change', (e) => {
-            this.audio.setVoice(e.target.value);
-        });
-
-        document.getElementById('speech-rate').addEventListener('input', (e) => {
-            const rate = parseFloat(e.target.value);
-            this.audio.setSpeechRate(rate);
-            document.getElementById('rate-value').textContent = rate.toFixed(1);
-        });
-
         document.getElementById('enable-sounds').addEventListener('change', (e) => {
             this.audio.setSoundsEnabled(e.target.checked);
         });
@@ -218,11 +286,10 @@ class ClaudeAssistant {
             this.ui.clearConversation();
         });
 
-        // Load voices and populate selector
-        setTimeout(() => {
-            const voices = this.audio.getVoices();
-            this.ui.populateVoiceSelector(voices, this.audio.selectedVoice);
-        }, 100);
+        // Stop button
+        document.getElementById('btn-stop').addEventListener('click', () => {
+            this.stopAllProcesses();
+        });
     }
 
     /**
@@ -308,6 +375,47 @@ class ClaudeAssistant {
     }
 
     /**
+     * Stop all current processes and return to ready/sleep state
+     */
+    stopAllProcesses() {
+        console.log('Stopping all processes...');
+
+        // Send interrupt signal to backend
+        if (this.ws && this.ws.isConnected()) {
+            this.ws.sendInterrupt('user_stopped');
+        }
+
+        // Stop listening if active
+        if (this.isListening) {
+            this.stopListening();
+        }
+
+        // Stop TTS playback
+        if (this.isProcessing) {
+            this.audio.stopSpeaking();
+            this.isProcessing = false;
+        }
+
+        // Stop wake word detection and return to sleep
+        if (this.activationMode === 'wake-word' && this.wakeWord) {
+            this.wakeWord.stopListening();
+        }
+
+        // Clear activation mode
+        document.querySelectorAll('.mode-btn').forEach(btn => {
+            btn.classList.remove('active', 'listening');
+        });
+        this.activationMode = null;
+
+        // Play sleep sound
+        this.audio.playSound('sleep');
+
+        // Update UI to ready state
+        this.ui.setStatus('Ready to assist');
+        this.ui.setVisualizerActive(false);
+    }
+
+    /**
      * Create new session
      */
     async createNewSession() {
@@ -322,6 +430,68 @@ class ClaudeAssistant {
 
         // Initialize new session
         await this.initializeSession();
+    }
+
+    /**
+     * Start wake word detection
+     */
+    async startWakeWord() {
+        this.setActivationMode('wake-word');
+
+        // Initialize wake word manager if not already done
+        if (!this.wakeWord) {
+            this.wakeWord = new WakeWordManager();
+
+            // Set up callbacks
+            this.wakeWord.onWakeWordDetected = (data) => {
+                console.log('Wake word detected!', data);
+                this.audio.playSound('wakeWord');
+                this.ui.setStatus(`Wake word "${data.wakeWord}" detected! Listening for command...`);
+
+                // Temporarily stop wake word listening
+                this.wakeWord.stopListening();
+
+                // Start regular listening for the command
+                this.startListening();
+            };
+
+            this.wakeWord.onError = (error) => {
+                console.error('Wake word error:', error);
+                this.ui.setStatus(`Wake word error: ${error}`, 'error');
+            };
+
+            this.wakeWord.onReady = (data) => {
+                console.log('Wake word ready:', data);
+                this.ui.setStatus(`Listening for wake word: "${data.wakeWord}"`);
+            };
+
+            await this.wakeWord.initialize('computer');
+        }
+
+        // Start listening for wake word
+        this.wakeWord.startListening();
+        this.ui.setStatus('Listening for wake word: "computer"');
+
+        // Update button state
+        document.getElementById('btn-wake-word').classList.add('active');
+    }
+
+    /**
+     * Stop wake word detection
+     */
+    stopWakeWord() {
+        if (this.wakeWord) {
+            this.wakeWord.stopListening();
+        }
+
+        this.activationMode = null;
+        this.ui.setStatus('Wake word detection stopped');
+
+        // Play sleep sound
+        this.audio.playSound('sleep');
+
+        // Update button state
+        document.getElementById('btn-wake-word').classList.remove('active');
     }
 }
 

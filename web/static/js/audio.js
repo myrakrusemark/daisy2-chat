@@ -12,22 +12,20 @@ class AudioManager {
             this.recognition = null;
         } else {
             this.recognition = new SpeechRecognition();
-            this.recognition.continuous = false;
+            this.recognition.continuous = true;  // Changed to continuous
             this.recognition.interimResults = true;
             this.recognition.lang = 'en-US';
         }
 
         // Track recognition state
         this.isRecognitionActive = false;
+        this.accumulatedTranscript = '';  // Buffer to accumulate transcript
 
-        // Speech Synthesis (TTS)
-        this.synthesis = window.speechSynthesis;
-        this.voices = [];
-        this.selectedVoice = null;
-        this.speechRate = 1.3;
-
-        // Load voices
-        this.loadVoices();
+        // Audio playback for streamed TTS
+        this.audioContext = null;
+        this.audioChunks = [];
+        this.isPlaying = false;
+        this.currentAudio = null;  // Track current audio element for stopping
 
         // Sound effects
         this.soundsEnabled = true;
@@ -49,58 +47,21 @@ class AudioManager {
     }
 
     /**
-     * Load available TTS voices
-     */
-    loadVoices() {
-        const loadVoicesImpl = () => {
-            this.voices = this.synthesis.getVoices();
-
-            // Prefer English voices
-            const enVoices = this.voices.filter(v => v.lang.startsWith('en'));
-            if (enVoices.length > 0) {
-                // Try to find a good default voice
-                this.selectedVoice = enVoices.find(v => v.name.includes('Google')) ||
-                                    enVoices.find(v => v.name.includes('Microsoft')) ||
-                                    enVoices[0];
-            } else {
-                this.selectedVoice = this.voices[0];
-            }
-
-            console.log(`Loaded ${this.voices.length} voices`);
-        };
-
-        // Load voices immediately
-        loadVoicesImpl();
-
-        // Also load when they become available (some browsers need this)
-        if (this.synthesis.onvoiceschanged !== undefined) {
-            this.synthesis.onvoiceschanged = loadVoicesImpl;
-        }
-    }
-
-    /**
-     * Get list of available voices
+     * No longer needed - Transformers.js doesn't have voice selection
+     * Keeping stubs for compatibility
      */
     getVoices() {
-        return this.voices;
+        return [];
     }
 
-    /**
-     * Set selected voice
-     */
     setVoice(voiceName) {
-        const voice = this.voices.find(v => v.name === voiceName);
-        if (voice) {
-            this.selectedVoice = voice;
-            console.log('Selected voice:', voice.name);
-        }
+        // No-op for Transformers.js
+        console.log('Voice selection not available with Transformers.js TTS');
     }
 
-    /**
-     * Set speech rate
-     */
     setSpeechRate(rate) {
-        this.speechRate = rate;
+        // No-op for Transformers.js
+        console.log('Speech rate control not available with Transformers.js TTS');
     }
 
     /**
@@ -111,21 +72,29 @@ class AudioManager {
 
         this.recognition.onresult = (event) => {
             let interimTranscript = '';
-            let finalTranscript = '';
 
-            for (let i = event.resultIndex; i < event.results.length; i++) {
+            // Build complete transcript from all results
+            let completeTranscript = '';
+            for (let i = 0; i < event.results.length; i++) {
                 const transcript = event.results[i][0].transcript;
                 if (event.results[i].isFinal) {
-                    finalTranscript += transcript;
+                    completeTranscript += transcript + ' ';
                 } else {
                     interimTranscript += transcript;
                 }
             }
 
-            if (finalTranscript && this.onTranscript) {
-                this.onTranscript(finalTranscript);
-            } else if (interimTranscript && this.onInterimTranscript) {
-                this.onInterimTranscript(interimTranscript);
+            // Update accumulated transcript
+            if (completeTranscript) {
+                this.accumulatedTranscript = completeTranscript.trim();
+            }
+
+            // Show interim results for user feedback
+            if (interimTranscript && this.onInterimTranscript) {
+                const displayText = this.accumulatedTranscript + ' ' + interimTranscript;
+                this.onInterimTranscript(displayText.trim());
+            } else if (this.accumulatedTranscript && this.onInterimTranscript) {
+                this.onInterimTranscript(this.accumulatedTranscript);
             }
         };
 
@@ -139,6 +108,15 @@ class AudioManager {
         this.recognition.onend = () => {
             console.log('Speech recognition ended');
             this.isRecognitionActive = false;
+
+            // Send accumulated transcript if we have one
+            if (this.accumulatedTranscript.trim() && this.onTranscript) {
+                this.onTranscript(this.accumulatedTranscript.trim());
+            }
+
+            // Clear the buffer
+            this.accumulatedTranscript = '';
+
             if (this.onEnd) {
                 this.onEnd();
             }
@@ -147,6 +125,8 @@ class AudioManager {
         this.recognition.onstart = () => {
             console.log('Speech recognition started');
             this.isRecognitionActive = true;
+            // Clear buffer when starting new recording
+            this.accumulatedTranscript = '';
         };
     }
 
@@ -205,39 +185,94 @@ class AudioManager {
     }
 
     /**
-     * Speak text using TTS
+     * Start TTS audio stream
      */
-    speak(text, onEnd = null) {
-        if (!this.synthesis) {
-            console.error('Speech synthesis not available');
+    startTTSStream() {
+        console.log('Starting TTS audio stream');
+        this.audioChunks = [];
+        this.isPlaying = false;
+
+        // Initialize audio context if needed
+        if (!this.audioContext) {
+            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        }
+    }
+
+    /**
+     * Add audio chunk to stream
+     */
+    addTTSChunk(audioData) {
+        // audioData is base64 encoded audio chunk
+        this.audioChunks.push(audioData);
+    }
+
+    /**
+     * Play the accumulated audio chunks
+     */
+    async playTTSStream(onEnd = null) {
+        console.log(`Playing TTS stream (${this.audioChunks.length} chunks)`);
+
+        if (this.audioChunks.length === 0) {
+            console.warn('No audio chunks to play');
+            if (onEnd) onEnd();
             return;
         }
 
-        // Cancel any ongoing speech
-        this.synthesis.cancel();
+        try {
+            // Concatenate all base64 chunks
+            const combinedB64 = this.audioChunks.join('');
 
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.rate = this.speechRate;
-        utterance.pitch = 1.0;
-        utterance.volume = 1.0;
+            // Decode base64 to binary
+            const binaryString = atob(combinedB64);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
 
-        if (this.selectedVoice) {
-            utterance.voice = this.selectedVoice;
+            // Create audio element and play
+            const blob = new Blob([bytes], { type: 'audio/wav' });
+            const audioUrl = URL.createObjectURL(blob);
+            const audio = new Audio(audioUrl);
+            this.currentAudio = audio;  // Track for stopping
+
+            audio.onended = () => {
+                console.log('TTS playback finished');
+                URL.revokeObjectURL(audioUrl);
+                this.isPlaying = false;
+                this.currentAudio = null;
+                if (onEnd) onEnd();
+            };
+
+            audio.onerror = (e) => {
+                console.error('Audio playback error:', e);
+                URL.revokeObjectURL(audioUrl);
+                this.isPlaying = false;
+                this.currentAudio = null;
+                if (onEnd) onEnd();
+            };
+
+            this.isPlaying = true;
+            await audio.play();
+
+        } catch (error) {
+            console.error('Error playing TTS stream:', error);
+            this.isPlaying = false;
+            if (onEnd) onEnd();
         }
-
-        if (onEnd) {
-            utterance.onend = onEnd;
-        }
-
-        this.synthesis.speak(utterance);
     }
 
     /**
      * Stop speaking
      */
     stopSpeaking() {
-        if (this.synthesis) {
-            this.synthesis.cancel();
+        this.isPlaying = false;
+        this.audioChunks = [];
+
+        // Stop currently playing audio
+        if (this.currentAudio) {
+            this.currentAudio.pause();
+            this.currentAudio.currentTime = 0;
+            this.currentAudio = null;
         }
     }
 

@@ -271,6 +271,45 @@ body {
     color: var(--error);
 }
 
+/* Stop Button */
+.btn-stop {
+    margin: 1rem auto 0;
+    padding: 0.75rem 1.5rem;
+    background-color: var(--error);
+    color: var(--text-primary);
+    border: none;
+    border-radius: 8px;
+    font-size: 1rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    transition: all 0.2s;
+    font-weight: 600;
+    width: fit-content;
+}
+
+.btn-stop:hover {
+    background-color: #cc0000;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(255, 68, 68, 0.4);
+}
+
+.btn-stop:active {
+    transform: translateY(0);
+}
+
+.btn-stop .icon {
+    font-size: 1.2rem;
+}
+
+.btn-stop.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
 /* Audio Visualizer */
 .audio-visualizer {
     margin-top: 1rem;
