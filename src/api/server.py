@@ -2,18 +2,24 @@
 
 import os
 import logging
+import zipfile
+import tempfile
 from pathlib import Path
 from typing import Optional
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from .session_manager import SessionManager
 from .websocket_handler import WebSocketHandler
-from .models import SessionCreate, SessionInfo, ConfigUpdate, ConversationHistory
+from .models import (
+    SessionCreate, SessionInfo, ConfigUpdate, ConversationHistory,
+    DownloadLinkRequest, DownloadLinkResponse
+)
+from .download_manager import DownloadTokenManager
 
 # Configure logging
 logging.basicConfig(
@@ -25,14 +31,15 @@ log = logging.getLogger(__name__)
 # Get project root
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 
-# Initialize session manager
+# Initialize managers
 session_manager: Optional[SessionManager] = None
+download_manager: Optional[DownloadTokenManager] = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan handler"""
-    global session_manager
+    global session_manager, download_manager
 
     # Startup
     max_sessions = int(os.getenv("MAX_SESSIONS", "10"))
@@ -40,10 +47,17 @@ async def lifespan(app: FastAPI):
     session_manager = SessionManager(max_sessions=max_sessions, session_timeout=session_timeout)
     log.info(f"Session manager initialized (max_sessions: {max_sessions}, timeout: {session_timeout}s)")
 
+    # Initialize download manager
+    download_manager = DownloadTokenManager()
+    await download_manager.start_cleanup_task()
+    log.info("Download manager initialized")
+
     yield
 
     # Shutdown
     log.info("Shutting down...")
+    if download_manager:
+        await download_manager.stop_cleanup_task()
 
 
 # Create FastAPI app
@@ -242,6 +256,189 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
     finally:
         # Detach websocket
         session.websocket = None
+
+
+@app.post("/api/download/generate", response_model=DownloadLinkResponse)
+async def generate_download_link(request: DownloadLinkRequest):
+    """
+    Generate a temporary download link for a file or directory
+
+    Args:
+        request: Download link request
+
+    Returns:
+        Download link response with token and URL
+    """
+    # Get session
+    session = session_manager.get_session(request.session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # Get base URL
+    base_url = os.getenv("BASE_URL", "http://localhost:8000")
+
+    # Create token
+    token = download_manager.create_token(
+        file_path=request.file_path,
+        session_id=request.session_id,
+        session_working_dir=session.config.working_directory,
+        expiry_minutes=request.expiry_minutes,
+    )
+
+    if not token:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Could not create download link. Please verify:\n"
+                   f"1. Path exists: {request.file_path}\n"
+                   f"2. Path is within working directory: {session.config.working_directory}\n"
+                   f"3. File/directory size is within limits (100MB)"
+        )
+
+    # Get token info for response
+    from datetime import datetime, timedelta
+    expires_at = datetime.now() + timedelta(minutes=request.expiry_minutes)
+
+    # Check file type
+    full_path = Path(request.file_path)
+    if not full_path.is_absolute():
+        full_path = session.config.working_directory / request.file_path
+
+    file_type = "directory (will be zipped)" if full_path.is_dir() else "file"
+    download_url = f"{base_url}/api/download/{token}"
+
+    message = f"Download link generated successfully!\n\n" \
+              f"URL: {download_url}\n" \
+              f"Type: {file_type}\n" \
+              f"Expires: {request.expiry_minutes} minute{'s' if request.expiry_minutes != 1 else ''}\n" \
+              f"Note: This is a single-use link that will be invalidated after download."
+
+    return DownloadLinkResponse(
+        token=token,
+        download_url=download_url,
+        expires_at=expires_at.isoformat(),
+        file_type=file_type,
+        message=message,
+    )
+
+
+@app.get("/api/download/stats")
+async def get_download_stats(session_id: Optional[str] = None):
+    """
+    Get download token statistics
+
+    Args:
+        session_id: Optional session ID to filter by
+
+    Returns:
+        Statistics about download tokens
+    """
+    stats = download_manager.get_stats()
+
+    if session_id:
+        session = session_manager.get_session(session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        return {
+            "session_id": session_id,
+            "working_directory": str(session.config.working_directory),
+            "statistics": stats
+        }
+
+    return {"statistics": stats}
+
+
+@app.get("/api/download/{token}")
+async def download_file(token: str):
+    """
+    Download a file or directory using a temporary token
+
+    Args:
+        token: Download token
+
+    Returns:
+        File download or zip archive for directories
+    """
+    # Validate token and get file info
+    token_info = download_manager.get_token_info(token)
+
+    if not token_info:
+        raise HTTPException(
+            status_code=404,
+            detail="Download link not found, expired, or already used"
+        )
+
+    file_path, session_id, is_directory = token_info
+
+    # Verify file still exists
+    if not file_path.exists():
+        raise HTTPException(
+            status_code=404,
+            detail="File no longer exists"
+        )
+
+    try:
+        if is_directory:
+            # Create zip file for directory
+            return await _serve_directory_as_zip(file_path)
+        else:
+            # Serve single file
+            return FileResponse(
+                path=file_path,
+                filename=file_path.name,
+                media_type="application/octet-stream",
+            )
+
+    except Exception as e:
+        log.error(f"Error serving download for token {token}: {e}")
+        raise HTTPException(status_code=500, detail="Error serving file")
+
+
+async def _serve_directory_as_zip(directory: Path) -> StreamingResponse:
+    """
+    Create a zip archive of a directory and serve it
+
+    Args:
+        directory: Directory path to zip
+
+    Returns:
+        StreamingResponse with zip file
+    """
+    # Create temporary zip file
+    temp_zip = tempfile.NamedTemporaryFile(delete=False, suffix='.zip')
+    temp_zip_path = Path(temp_zip.name)
+    temp_zip.close()
+
+    try:
+        # Create zip archive
+        with zipfile.ZipFile(temp_zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            # Walk through directory
+            for file_path in directory.rglob('*'):
+                if file_path.is_file():
+                    # Add file to zip with relative path
+                    arcname = file_path.relative_to(directory)
+                    zipf.write(file_path, arcname)
+
+        # Create streaming response
+        def iterfile():
+            with open(temp_zip_path, 'rb') as f:
+                yield from f
+            # Clean up temp file after streaming
+            temp_zip_path.unlink()
+
+        return StreamingResponse(
+            iterfile(),
+            media_type="application/zip",
+            headers={
+                "Content-Disposition": f"attachment; filename={directory.name}.zip"
+            }
+        )
+
+    except Exception as e:
+        # Clean up temp file on error
+        if temp_zip_path.exists():
+            temp_zip_path.unlink()
+        raise e
 
 
 def main():

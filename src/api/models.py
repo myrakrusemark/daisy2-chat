@@ -85,3 +85,19 @@ class ConversationHistory(BaseModel):
     conversation_id: str
     messages: List[Dict[str, Any]]
     message_count: int
+
+
+class DownloadLinkRequest(BaseModel):
+    """Request to generate a download link"""
+    session_id: str
+    file_path: str
+    expiry_minutes: int = 5
+
+
+class DownloadLinkResponse(BaseModel):
+    """Response with download link"""
+    token: str
+    download_url: str
+    expires_at: str
+    file_type: str  # "file" or "directory"
+    message: str

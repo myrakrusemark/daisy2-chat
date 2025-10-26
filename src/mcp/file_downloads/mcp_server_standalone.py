@@ -1,0 +1,132 @@
+#!/usr/bin/env python3
+"""
+Standalone MCP server for file downloads
+
+This script is designed to be invoked by Claude Code as an MCP server.
+It receives configuration through environment variables and provides
+download link generation tools.
+"""
+
+import os
+import sys
+import json
+import logging
+from pathlib import Path
+
+# Add parent directory to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
+
+from mcp.server.fastmcp import FastMCP
+
+log = logging.getLogger(__name__)
+
+# Create MCP server
+mcp = FastMCP("file-downloads")
+
+
+@mcp.tool()
+def generate_download_link(
+    path: str,
+    expiry_minutes: int = 5,
+) -> str:
+    """
+    Generate a secure, temporary download link for a file or directory.
+
+    This creates a time-limited, single-use URL that allows downloading the specified
+    file or directory (as a zip). The link expires after the specified time or after
+    one download, whichever comes first.
+
+    IMPORTANT: This tool communicates with the FastAPI server to generate tokens.
+    It requires the server to be running and accessible.
+
+    Args:
+        path: Path to file or directory (relative to working directory or absolute)
+        expiry_minutes: Minutes until link expires (default: 5, max: 60)
+
+    Returns:
+        Download URL that can be opened in a browser
+
+    Example:
+        # Generate link for a single file
+        url = generate_download_link("output/report.pdf")
+
+        # Generate link for a directory (will be zipped)
+        url = generate_download_link("project/src", expiry_minutes=10)
+    """
+    # Get configuration from environment
+    api_url = os.getenv("DOWNLOAD_API_URL", "http://localhost:8000")
+    session_id = os.getenv("SESSION_ID")
+    working_directory = os.getenv("WORKING_DIRECTORY", os.getcwd())
+
+    if not session_id:
+        return "Error: SESSION_ID environment variable not set. This tool requires session context."
+
+    # Validate expiry time
+    if expiry_minutes < 1 or expiry_minutes > 60:
+        return "Error: expiry_minutes must be between 1 and 60"
+
+    # Make API request to generate token
+    import requests
+
+    try:
+        response = requests.post(
+            f"{api_url}/api/download/generate",
+            json={
+                "session_id": session_id,
+                "file_path": path,
+                "expiry_minutes": expiry_minutes,
+            },
+            timeout=10,
+        )
+
+        if response.status_code == 200:
+            data = response.json()
+            return data["message"]
+        else:
+            error_detail = response.json().get("detail", "Unknown error")
+            return f"Error generating download link: {error_detail}"
+
+    except requests.exceptions.RequestException as e:
+        return f"Error communicating with server: {str(e)}"
+
+
+@mcp.tool()
+def list_download_stats() -> dict:
+    """
+    Get statistics about active download tokens.
+
+    Returns current information about download tokens including how many
+    are active, used, or expired.
+
+    Returns:
+        Dictionary with token statistics
+    """
+    # Get configuration from environment
+    api_url = os.getenv("DOWNLOAD_API_URL", "http://localhost:8000")
+    session_id = os.getenv("SESSION_ID")
+
+    if not session_id:
+        return {"error": "SESSION_ID environment variable not set"}
+
+    # Make API request
+    import requests
+
+    try:
+        response = requests.get(
+            f"{api_url}/api/download/stats",
+            params={"session_id": session_id},
+            timeout=10,
+        )
+
+        if response.status_code == 200:
+            return response.json()
+        else:
+            return {"error": f"Server error: {response.status_code}"}
+
+    except requests.exceptions.RequestException as e:
+        return {"error": f"Communication error: {str(e)}"}
+
+
+if __name__ == "__main__":
+    # Run the MCP server
+    mcp.run()
