@@ -54,7 +54,7 @@ class UIComponents {
 
         // Check if this is a download link generation tool
         let downloadButton = '';
-        if (toolName === 'generate_download_link' && toolInput && toolInput.path) {
+        if ((toolName === 'generate_download_link' || toolName === 'mcp__file-downloads__generate_download_link') && toolInput && toolInput.path) {
             const fileName = toolInput.path.split('/').pop();
             downloadButton = `
                 <div class="download-button-container" style="margin-top: 12px;">
