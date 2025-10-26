@@ -343,9 +343,8 @@ Reply with ONLY the specific summary sentence starting with a verb ending in -in
 
         Args:
             prompt: User prompt to send to Claude
-            on_tool_use: Callback when a tool is used (immediate)
-            on_tool_summary_update: Callback when better summary is ready (delayed)
             on_tool_use: Callback when a tool is used (tool_name, tool_input, summary)
+            on_tool_summary_update: Callback when better summary is ready (delayed)
             conversation_history: Optional conversation history for context
 
         Returns:

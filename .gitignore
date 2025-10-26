@@ -26,6 +26,8 @@ MANIFEST
 venv/
 ENV/
 env/
+# Prevent accidentally committing MCP server virtual environments
+src/mcp/**/.venv/
 
 # Environment variables
 .env

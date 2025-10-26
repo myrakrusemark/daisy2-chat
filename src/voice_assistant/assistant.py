@@ -136,7 +136,7 @@ class VoiceAssistant:
             self.sounds.play_sleep(blocking=True)
 
         finally:
-            self._cleanup()
+            await self._cleanup()
 
     async def _listen(self) -> str:
         """Listen for user speech"""
@@ -206,7 +206,7 @@ class VoiceAssistant:
         # Speak final response
         self.tts.speak(response_text, blocking=True)
 
-    def _cleanup(self):
+    async def _cleanup(self):
         """Clean up resources"""
         log.info("Cleaning up resources...")
 
@@ -217,6 +217,6 @@ class VoiceAssistant:
             self.stt.cleanup()
 
         if hasattr(self, 'claude'):
-            self.claude.cleanup()
+            await self.claude.cleanup()
 
         log.info("Cleanup complete")
