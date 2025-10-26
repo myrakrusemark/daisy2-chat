@@ -37,19 +37,22 @@ def generate_download_link(
     file or directory (as a zip). The link expires after the specified time or after
     one download, whichever comes first.
 
-    IMPORTANT: This tool communicates with the FastAPI server to generate tokens.
-    It requires the server to be running and accessible.
+    CRITICAL: When you receive the download URL from this tool:
+    - ALWAYS include the complete URL in your response to the user
+    - NEVER save the URL to a file
+    - Present it directly so the user can click or copy it
+    - The URL format is: http://localhost:8000/api/download/{token}
 
     Args:
         path: Path to file or directory (relative to working directory or absolute)
         expiry_minutes: Minutes until link expires (default: 5, max: 60)
 
     Returns:
-        Download URL that can be opened in a browser
+        Download URL and expiry information formatted for user display
 
     Example:
         # Generate link for a single file
-        url = generate_download_link("output/report.pdf")
+        url = generate_download_link("Shopping-List.md")
 
         # Generate link for a directory (will be zipped)
         url = generate_download_link("project/src", expiry_minutes=10)
@@ -94,7 +97,19 @@ def generate_download_link(
 
         if response.status_code == 200:
             data = response.json()
-            return data["message"]
+            download_url = data["download_url"]
+            file_type = data["file_type"]
+            expires_minutes = expiry_minutes
+
+            # Return ONLY the essential info - no saving to files!
+            return (
+                f"Download link ready!\n\n"
+                f"🔗 URL: {download_url}\n\n"
+                f"⏱️  Expires in {expires_minutes} minute{'s' if expires_minutes != 1 else ''}\n"
+                f"📁 Type: {file_type}\n"
+                f"⚠️  Single-use link - will be invalidated after download\n\n"
+                f"IMPORTANT: Share this URL directly with the user - do NOT save it to a file!"
+            )
         else:
             error_detail = response.json().get("detail", "Unknown error")
             return f"Error generating download link: {error_detail}"
