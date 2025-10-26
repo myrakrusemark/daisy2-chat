@@ -84,6 +84,9 @@ class DownloadTokenManager:
         """
         Validate that file_path is within session working directory
 
+        This allows symlinks in the working directory that point outside,
+        as long as the symlink itself is in the working directory.
+
         Args:
             file_path: Path to validate
             session_working_dir: Session's working directory (sandbox)
@@ -92,7 +95,18 @@ class DownloadTokenManager:
             True if path is safe, False otherwise
         """
         try:
-            # Resolve to absolute paths
+            # For symlinks, check if the symlink itself is in the workspace
+            # (not where it points to)
+            if file_path.is_symlink():
+                # Get the symlink location (not the target)
+                symlink_parent = file_path.parent.resolve()
+                resolved_sandbox = session_working_dir.resolve()
+
+                # Check if symlink is within sandbox
+                if symlink_parent.is_relative_to(resolved_sandbox):
+                    return True
+
+            # For regular files, resolve and check normally
             resolved_file = file_path.resolve()
             resolved_sandbox = session_working_dir.resolve()
 

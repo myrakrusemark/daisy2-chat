@@ -11,6 +11,7 @@ import os
 import sys
 import json
 import logging
+import requests
 from pathlib import Path
 
 # Add parent directory to path for imports
@@ -58,16 +59,28 @@ def generate_download_link(
     session_id = os.getenv("SESSION_ID")
     working_directory = os.getenv("WORKING_DIRECTORY", os.getcwd())
 
+    # If no session ID provided, try to get the active session
     if not session_id:
-        return "Error: SESSION_ID environment variable not set. This tool requires session context."
+        try:
+            response = requests.get(f"{api_url}/api/sessions", timeout=5)
+            if response.status_code == 200:
+                sessions = response.json().get("sessions", [])
+                if sessions:
+                    # Use the most recently active session
+                    sessions.sort(key=lambda s: s.get("last_activity", ""), reverse=True)
+                    session_id = sessions[0]["session_id"]
+                    log.info(f"Auto-detected session: {session_id}")
+        except Exception as e:
+            log.warning(f"Could not auto-detect session: {e}")
+
+    if not session_id:
+        return "Error: No active session found. Please ensure the server is running and has an active session."
 
     # Validate expiry time
     if expiry_minutes < 1 or expiry_minutes > 60:
         return "Error: expiry_minutes must be between 1 and 60"
 
     # Make API request to generate token
-    import requests
-
     try:
         response = requests.post(
             f"{api_url}/api/download/generate",
@@ -105,12 +118,22 @@ def list_download_stats() -> dict:
     api_url = os.getenv("DOWNLOAD_API_URL", "http://localhost:8000")
     session_id = os.getenv("SESSION_ID")
 
+    # If no session ID provided, try to get the active session
     if not session_id:
-        return {"error": "SESSION_ID environment variable not set"}
+        try:
+            response = requests.get(f"{api_url}/api/sessions", timeout=5)
+            if response.status_code == 200:
+                sessions = response.json().get("sessions", [])
+                if sessions:
+                    sessions.sort(key=lambda s: s.get("last_activity", ""), reverse=True)
+                    session_id = sessions[0]["session_id"]
+        except Exception as e:
+            log.warning(f"Could not auto-detect session: {e}")
+
+    if not session_id:
+        return {"error": "No active session found"}
 
     # Make API request
-    import requests
-
     try:
         response = requests.get(
             f"{api_url}/api/download/stats",
