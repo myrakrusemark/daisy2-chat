@@ -52,18 +52,117 @@ class UIComponents {
             inputDisplay = `<div class="tool-input">${this.escapeHtml(inputStr)}</div>`;
         }
 
+        // Check if this is a download link generation tool
+        let downloadButton = '';
+        if (toolName === 'generate_download_link' && toolInput && toolInput.path) {
+            const fileName = toolInput.path.split('/').pop();
+            downloadButton = `
+                <div class="download-button-container" style="margin-top: 12px;">
+                    <button class="download-link-btn" data-path="${this.escapeHtml(toolInput.path)}" style="
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        color: white;
+                        border: none;
+                        padding: 12px 24px;
+                        border-radius: 8px;
+                        font-size: 14px;
+                        font-weight: 600;
+                        cursor: pointer;
+                        display: inline-flex;
+                        align-items: center;
+                        gap: 8px;
+                        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                        transition: all 0.2s ease;
+                    " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 12px rgba(0,0,0,0.15)';" onmouseout="this.style.transform=''; this.style.boxShadow='0 4px 6px rgba(0,0,0,0.1)';">
+                        📥 Download ${this.escapeHtml(fileName)}
+                    </button>
+                    <div class="download-status" style="margin-top: 8px; font-size: 12px; color: #666;"></div>
+                </div>
+            `;
+        }
+
         indicatorEl.innerHTML = `
             <div class="message-header">🔧 Tool Used</div>
             <div class="message-content">
                 <span class="tool-badge">${toolName}</span>
                 <span class="tool-summary">${summary}</span>
                 ${inputDisplay}
+                ${downloadButton}
             </div>
             <div class="message-timestamp">${this.getTimestamp()}</div>
         `;
 
+        // Add click handler for download button
+        if (downloadButton) {
+            setTimeout(() => {
+                const btn = indicatorEl.querySelector('.download-link-btn');
+                if (btn) {
+                    btn.addEventListener('click', () => this.handleDownloadClick(btn));
+                }
+            }, 0);
+        }
+
         this.appendMessage(indicatorEl);
         return indicatorEl;
+    }
+
+    /**
+     * Handle download button click
+     */
+    async handleDownloadClick(button) {
+        const path = button.dataset.path;
+        const statusEl = button.parentElement.querySelector('.download-status');
+
+        // Get current session ID
+        const sessionId = window.sessionManager?.sessionId;
+        if (!sessionId) {
+            statusEl.textContent = '❌ No active session';
+            statusEl.style.color = '#e53e3e';
+            return;
+        }
+
+        // Disable button and show loading
+        button.disabled = true;
+        button.style.opacity = '0.6';
+        button.style.cursor = 'not-allowed';
+        statusEl.textContent = '⏳ Generating download link...';
+        statusEl.style.color = '#666';
+
+        try {
+            // Generate download token
+            const response = await fetch('/api/download/generate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    session_id: sessionId,
+                    file_path: path,
+                    expiry_minutes: 10
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to generate download link');
+            }
+
+            const data = await response.json();
+
+            // Open download URL in new tab
+            window.open(data.download_url, '_blank');
+
+            statusEl.innerHTML = `✅ Download started! <span style="font-size: 10px;">(Link expires in 10 min)</span>`;
+            statusEl.style.color = '#38a169';
+
+        } catch (error) {
+            statusEl.textContent = '❌ Failed to generate download link';
+            statusEl.style.color = '#e53e3e';
+            console.error('Download error:', error);
+        } finally {
+            // Re-enable button after 2 seconds
+            setTimeout(() => {
+                button.disabled = false;
+                button.style.opacity = '1';
+                button.style.cursor = 'pointer';
+            }, 2000);
+        }
     }
 
     /**
