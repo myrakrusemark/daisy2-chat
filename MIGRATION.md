@@ -2,87 +2,32 @@
 
 ## Overview
 
-The project has been reorganized from a monolithic structure to a clean, modular architecture. This guide helps you migrate from the old structure to the new one.
+This document has been preserved for historical reference. The project has evolved from a voice assistant to a web-based Claude Code interface.
 
-## What Changed
+## Current Architecture (2025)
 
-### Old Structure
 ```
-claude-assistant/
-├── voice_to_claude_code_fast.py  # 1,290 line monolith
-├── sounds/                        # Sound effects
-├── output/                        # Conversation logs
-├── mcp-servers/                   # MCP implementations
-└── sandbox/                       # Workspace
-```
-
-### New Structure
-```
-claude-assistant/
-├── src/                          # Organized source code
-│   ├── voice_assistant/          # Modular voice assistant
-│   └── mcp/                      # MCP servers with base class
-├── assets/audio/                 # Sound effects (moved)
-├── data/conversations/           # Conversation logs (moved)
-├── config/                       # Configuration files
-├── docs/                         # Documentation
-└── tests/                        # Test suite
+cassistant/
+├── src/
+│   ├── api/              # FastAPI web server
+│   └── mcp/              # MCP server implementations
+├── web/                  # Browser-based UI
+├── docs/                 # Documentation
+└── tests/                # Test suite
 ```
 
-## File Mapping
+## Entry Point
 
-| Old Location | New Location | Notes |
-|-------------|--------------|-------|
-| `voice_to_claude_code_fast.py` | `src/voice_assistant/` | Split into modules |
-| `sounds/` | `assets/audio/` | Renamed for clarity |
-| `output/` | `data/conversations/` | Better organization |
-| `mcp-servers/` | `src/mcp/trading_agent/` | Structured as package |
-| `CLAUDE.md` | `docs/CLAUDE.md` | Documentation folder |
-
-## Breaking Changes
-
-### 1. Entry Point Changed
-
-**Old:**
+**Current:**
 ```bash
-uv run voice_to_claude_code_fast.py
+# Start web server
+./start-server.sh
+
+# Or directly
+uv run cassistant-server
 ```
 
-**New:**
-```bash
-# Using module
-uv run python -m voice_assistant.main
-
-# Or using entry point (after install)
-claude-assistant
-
-# Or using start script
-./start.sh
-```
-
-### 2. Import Paths
-
-**Old (if importing):**
-```python
-from voice_to_claude_code_fast import ClaudeCodeAssistant
-```
-
-**New:**
-```python
-from voice_assistant.assistant import VoiceAssistant
-from voice_assistant.config import create_default_config
-
-config = create_default_config()
-assistant = VoiceAssistant(config)
-```
-
-### 3. Sound File Paths
-
-Sound files moved from `sounds/` to `assets/audio/`. The config system handles this automatically, but if you have custom scripts, update paths.
-
-### 4. Conversation Logs
-
-Conversation history files moved from `output/` to `data/conversations/`. Old files have been migrated automatically.
+Access via browser at `http://localhost:8000`
 
 ## Installation
 

@@ -116,7 +116,7 @@ async def create_session(session_create: SessionCreate):
             if not any(str(working_dir).startswith(allowed) for allowed in allowed_paths):
                 raise HTTPException(status_code=400, detail="Working directory not allowed")
 
-        session = session_manager.create_session(
+        session = await session_manager.create_session(
             working_directory=working_dir,
             tool_profile=session_create.tool_profile,
             allowed_tools=session_create.allowed_tools,

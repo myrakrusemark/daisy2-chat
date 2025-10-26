@@ -42,7 +42,7 @@ class SessionManager:
         self.sessions: Dict[str, Session] = {}
         log.info(f"Session manager initialized (max_sessions: {max_sessions})")
 
-    def create_session(
+    async def create_session(
         self,
         working_directory: Optional[Path] = None,
         tool_profile: Optional[str] = "coding",
@@ -103,6 +103,11 @@ class SessionManager:
 
         self.sessions[session_id] = session
         log.info(f"Created session {session_id} (total: {len(self.sessions)})")
+
+        # Start Claude process immediately
+        log.info(f"Starting Claude process for session {session_id}")
+        await claude_client._start_persistent_claude()
+        log.info(f"Claude process ready for session {session_id}")
 
         return session
 

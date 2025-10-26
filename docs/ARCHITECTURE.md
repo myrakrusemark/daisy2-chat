@@ -2,109 +2,81 @@
 
 ## System Overview
 
-The Claude Voice Assistant is built on a modular architecture separating concerns into distinct layers:
+The Claude Assistant is a web-based application with a FastAPI backend that manages Claude Code sessions via WebSocket connections.
 
 ```
 ┌─────────────────────────────────────────┐
-│          User Interface Layer           │
-│  (Rich Console UI, Sound Effects)       │
+│          Web UI (Browser)               │
+│  (HTML/CSS/JavaScript Interface)        │
 └────────────────┬────────────────────────┘
-                 │
+                 │ WebSocket
 ┌────────────────▼────────────────────────┐
-│       Application Layer                 │
-│  (VoiceAssistant orchestrator)          │
+│       FastAPI Server                    │
+│  (Session & WebSocket Management)       │
 └───┬──────────┬──────────┬───────────────┘
     │          │          │
     ▼          ▼          ▼
 ┌───────┐  ┌───────┐  ┌───────┐
-│ Audio │  │Claude │  │Config │
-│ Layer │  │ Layer │  │Manager│
+│Session│  │Claude │  │Download│
+│Manager│  │Client │  │Manager │
 └───────┘  └───────┘  └───────┘
 ```
 
 ## Layer Descriptions
 
-### 1. Audio Layer (`src/voice_assistant/audio/`)
+### 1. Web UI Layer (`web/`)
 
-Handles all audio input/output operations:
+Browser-based interface for interacting with Claude:
 
-- **Wake Word Detection** (`wake_word.py`): Picovoice Porcupine integration
-- **Speech-to-Text** (`stt.py`): Picovoice Cheetah streaming STT
-- **Text-to-Speech** (`tts.py`): Piper TTS for local voice synthesis
-- **Sound Effects** (`sounds.py`): Audio feedback management
+- Real-time chat interface via WebSocket
+- Tool execution monitoring
+- File download capabilities
+- Session management
 
-**Key Design Decisions:**
-- Each audio component is self-contained and independently testable
-- Streaming STT (Cheetah) chosen over batch processing for lower latency
-- Local TTS (Piper) eliminates API dependencies and reduces costs
+### 2. API Layer (`src/api/`)
 
-### 2. Claude Layer (`src/voice_assistant/claude/`)
+FastAPI server managing sessions and connections:
 
-Manages Claude Code integration and conversation:
-
-- **Claude Client** (`client.py`): Subprocess wrapper for Claude CLI
-- **Conversation Manager** (`conversation.py`): History persistence (YAML)
+- **Server** (`server.py`): Main FastAPI application with routes
+- **Session Manager** (`session_manager.py`): Multi-session handling
+- **WebSocket Handler** (`websocket_handler.py`): Real-time message routing
+- **Download Manager** (`download_manager.py`): Secure file download tokens
 
 **Key Design Decisions:**
-- Uses subprocess instead of direct API for tool access consistency
-- YAML format for human-readable conversation logs
-- Conversation history limited to recent messages to manage context size
+- WebSocket for real-time streaming
+- Session-based isolation for multi-user support
+- Token-based download security
 
-### 3. Configuration Layer (`src/voice_assistant/config.py`)
+### 3. Claude Client Layer (`src/voice_assistant/claude/`)
 
-Centralized configuration management using dataclasses:
+Manages Claude Code integration:
 
-- `AssistantConfig`: Main configuration container
-- `AudioConfig`: Audio-specific settings
-- `ClaudeConfig`: Claude Code settings
-- `PicovoiceConfig`: Wake word & STT settings
+- **Claude Client** (`client.py`): Claude Code CLI subprocess wrapper with streaming
+- **Conversation Manager** (`conversation.py`): History persistence
 
 **Key Design Decisions:**
-- Dataclasses for type safety and IDE autocomplete
-- Environment variable defaults with programmatic overrides
-- Validation logic separated from configuration data
-
-### 4. UI Layer (`src/voice_assistant/ui/`)
-
-Rich-based console interface:
-
-- Status messages and indicators
-- Formatted conversation display
-- Error and success notifications
-
-### 5. Application Layer (`src/voice_assistant/assistant.py`)
-
-Main orchestrator that coordinates all components:
-
-```python
-VoiceAssistant
-├── Wake word detected → Play sound
-├── Listen for speech → Transcribe
-├── Send to Claude → Get response
-├── Update conversation → Save history
-└── Speak response → Wait for next wake word
-```
+- Persistent subprocess for reduced latency
+- Streaming responses for real-time feedback
+- Conversation history for context continuity
 
 ## Data Flow
 
 ```
-1. User says "hey daisy"
+1. User opens web page
    ↓
-2. WakeWordDetector detects wake word
+2. WebSocket connection established
    ↓
-3. SoundEffects plays confirmation
+3. Session created with Claude client
    ↓
-4. CheetahSTT listens and transcribes
+4. User sends message via WebSocket
    ↓
-5. ConversationManager adds user message
+5. Claude client processes with streaming
    ↓
-6. ClaudeCodeClient executes request
+6. Tool executions streamed back to UI
    ↓
-7. ConversationManager adds assistant response
+7. Final response displayed
    ↓
-8. PiperTTS speaks response
-   ↓
-9. Loop back to step 1
+8. Conversation history maintained
 ```
 
 ## MCP Server Architecture
@@ -165,20 +137,17 @@ tests/
 
 ## Extension Points
 
-### Adding New Audio Engines
-
-Implement interface in `src/voice_assistant/audio/`:
-```python
-class NewSTT:
-    def listen(self) -> str: ...
-```
-
 ### Adding Custom MCP Servers
 
 1. Create subclass of `BaseMCPServer`
 2. Implement `_register_handlers()` and `get_tools()`
 3. Add to `src/mcp/your_server/`
 
-### Adding New UI Outputs
+### Adding New API Endpoints
 
-Extend `AssistantUI` class or create alternative implementation
+Extend `src/api/server.py` with new FastAPI routes:
+```python
+@app.post("/your-endpoint")
+async def your_endpoint():
+    ...
+```
