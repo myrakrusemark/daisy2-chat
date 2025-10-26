@@ -90,6 +90,12 @@ class ClaudeAssistant {
             console.log('Connected to WebSocket');
             this.ui.setConnectionStatus('connected');
             this.ui.setStatus('Ready to assist');
+
+            // Start wake word mode if checkbox is checked
+            const wakeWordToggle = document.getElementById('wake-word-toggle');
+            if (wakeWordToggle && wakeWordToggle.checked) {
+                this.startWakeWord();
+            }
         };
 
         this.ws.onDisconnect = () => {
@@ -110,10 +116,37 @@ class ClaudeAssistant {
             // TTS will be handled by separate TTS callbacks
         };
 
+        // Track tool indicators for updates
+        this.toolIndicators = new Map();
+
         this.ws.onToolUse = (toolName, toolInput, summary) => {
             console.log('Tool use:', toolName, summary);
-            this.ui.addToolUseIndicator(toolName, summary);
+            const indicatorEl = this.ui.addToolUseIndicator(toolName, summary, toolInput);
+
+            // Store indicator for potential updates
+            const toolKey = `${toolName}_${Date.now()}`;
+            this.toolIndicators.set(toolKey, indicatorEl);
+
             this.audio.playSound('tool');
+        };
+
+        // Handle tool summary updates
+        this.ws.onToolSummaryUpdate = (toolName, toolInput, betterSummary) => {
+            console.log('Tool summary update:', toolName, betterSummary);
+
+            // Mark that we're speaking a tool summary (not the final response)
+            this.speakingToolSummary = true;
+
+            // Find the most recent indicator for this tool
+            const indicators = Array.from(this.toolIndicators.entries())
+                .filter(([key]) => key.startsWith(toolName))
+                .sort(([a], [b]) => b.split('_')[1] - a.split('_')[1]);
+
+            if (indicators.length > 0) {
+                const [, indicatorEl] = indicators[0];
+                this.ui.updateToolSummary(indicatorEl, betterSummary);
+                // TTS is handled by server via stream_tts_audio
+            }
         };
 
         this.ws.onProcessing = (status) => {
@@ -134,6 +167,9 @@ class ClaudeAssistant {
         };
 
         // TTS streaming callbacks
+        // Track if we're in the middle of speaking tool summaries
+        this.speakingToolSummary = false;
+
         this.ws.onTTSStart = (text) => {
             console.log('TTS stream starting');
             this.audio.startTTSStream();
@@ -147,11 +183,19 @@ class ClaudeAssistant {
             console.log('TTS stream complete, playing audio');
             this.audio.playTTSStream(() => {
                 console.log('Finished speaking');
-                this.ui.setStatus('Ready to assist');
-                this.isProcessing = false;
 
-                // Play sleep sound to indicate returning to idle state
-                this.audio.playSound('sleep');
+                // Only play sleep sound and reset state if this was the final response
+                // (not a tool summary)
+                if (!this.speakingToolSummary) {
+                    this.ui.setStatus('Ready to assist');
+                    this.isProcessing = false;
+
+                    // Play sleep sound to indicate returning to idle state
+                    this.audio.playSound('sleep');
+                } else {
+                    // Reset flag for next TTS
+                    this.speakingToolSummary = false;
+                }
             });
         };
 
@@ -251,13 +295,13 @@ class ClaudeAssistant {
             }
         });
 
-        document.getElementById('btn-wake-word').addEventListener('click', () => {
-            if (this.activationMode === 'wake-word') {
-                // Stop wake word mode
-                this.stopWakeWord();
-            } else {
+        document.getElementById('wake-word-toggle').addEventListener('change', (e) => {
+            if (e.target.checked) {
                 // Start wake word mode
                 this.startWakeWord();
+            } else {
+                // Stop wake word mode
+                this.stopWakeWord();
             }
         });
 
@@ -293,9 +337,8 @@ class ClaudeAssistant {
 
         if (mode === 'push-to-talk') {
             document.getElementById('btn-push-to-talk').classList.add('active');
-        } else if (mode === 'wake-word') {
-            document.getElementById('btn-wake-word').classList.add('active');
         }
+        // Wake word mode is handled by the checkbox state
     }
 
     /**
@@ -378,22 +421,26 @@ class ClaudeAssistant {
             this.isProcessing = false;
         }
 
-        // Stop wake word detection and return to sleep
+        // If in wake word mode, return to listening for wake word
+        // Otherwise, clear activation mode
         if (this.activationMode === 'wake-word' && this.wakeWord) {
+            // Just restart wake word listening, don't turn off the mode
             this.wakeWord.stopListening();
+            setTimeout(() => {
+                this.wakeWord.startListening();
+                this.ui.setStatus('Listening for wake word: "computer"');
+            }, 500);
+        } else {
+            // Not in wake word mode, so clear activation mode
+            document.querySelectorAll('.mode-btn').forEach(btn => {
+                btn.classList.remove('active', 'listening');
+            });
+            this.activationMode = null;
+            this.ui.setStatus('Ready to assist');
         }
-
-        // Clear activation mode
-        document.querySelectorAll('.mode-btn').forEach(btn => {
-            btn.classList.remove('active', 'listening');
-        });
-        this.activationMode = null;
 
         // Play sleep sound
         this.audio.playSound('sleep');
-
-        // Update UI to ready state
-        this.ui.setStatus('Ready to assist');
     }
 
     /**
@@ -452,9 +499,6 @@ class ClaudeAssistant {
         // Start listening for wake word
         this.wakeWord.startListening();
         this.ui.setStatus('Listening for wake word: "computer"');
-
-        // Update button state
-        document.getElementById('btn-wake-word').classList.add('active');
     }
 
     /**
@@ -470,9 +514,6 @@ class ClaudeAssistant {
 
         // Play sleep sound
         this.audio.playSound('sleep');
-
-        // Update button state
-        document.getElementById('btn-wake-word').classList.remove('active');
     }
 }
 
