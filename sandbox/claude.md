@@ -11,17 +11,37 @@ This Claude Code instance is running within a voice-controlled assistant sandbox
 
 ### Docker Container Management
 
-#### Updating Symlinks and Restarting Container
-When you add new symlinks to `/home/myra/cassistant-sandbox`, use the update script to automatically configure and restart the container:
+#### Restarting the Container
+When you make code changes or need to restart the voice assistant container, use the update-and-restart script:
 
 ```bash
+# Quick restart (no rebuild - use for config/symlink changes)
 /home/myra/cassistant/update-and-restart.sh
+
+# Full rebuild (use after code changes to Python/JS files)
+/home/myra/cassistant/update-and-restart.sh --build
 ```
 
 This script will:
 1. Scan `/home/myra/cassistant-sandbox` for all symlinks
-2. Update `docker-compose.yml` with bind mounts for each symlink target
+2. Update `docker-compose.yml` with bind mounts for each symlink target (if needed)
 3. Restart the container with the updated configuration
+4. If `--build` flag is provided, rebuild the Docker image from scratch
+
+**When to use this script:**
+- **Quick restart** (no `--build`):
+  - When adding new symlinks to `/home/myra/cassistant-sandbox`
+  - When updating docker-compose.yml configuration
+  - When the container needs to be restarted but code hasn't changed
+- **Full rebuild** (with `--build`):
+  - After making code changes to Python files in `src/`
+  - After making changes to JavaScript files in `web/static/js/`
+  - After making changes to CSS files in `web/static/css/`
+  - After making changes to HTML files in `web/`
+  - After updating dependencies in `pyproject.toml`
+  - When you need a clean build from scratch
+
+**Important**: JavaScript, CSS, and HTML changes DO require a full rebuild with `--build` flag because these files are copied into the Docker image during the build process.
 
 #### Current Symlinks
 The following symlinks are available in the workspace:

@@ -17,6 +17,7 @@ class WebSocketClient {
         this.onSessionInfo = null;
         this.onAssistantMessage = null;
         this.onToolUse = null;
+        this.onToolSummaryUpdate = null;
         this.onProcessing = null;
         this.onError = null;
         this.onTTSStart = null;
@@ -104,6 +105,13 @@ class WebSocketClient {
                 console.log('Tool use:', message.tool, message.summary);
                 if (this.onToolUse) {
                     this.onToolUse(message.tool, message.input, message.summary);
+                }
+                break;
+
+            case 'tool_summary_update':
+                console.log('Tool summary update:', message.tool, message.summary);
+                if (this.onToolSummaryUpdate) {
+                    this.onToolSummaryUpdate(message.tool, message.input, message.summary);
                 }
                 break;
 

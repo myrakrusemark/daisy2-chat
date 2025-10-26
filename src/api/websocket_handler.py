@@ -157,10 +157,28 @@ class WebSocketHandler:
                 # Send tool use notification to browser
                 await self.send_tool_use(tool_name, tool_input, summary)
 
+            # Define callback for tool summary updates
+            async def on_tool_summary_update(tool_name: str, tool_input: dict, better_summary: str):
+                """Callback when a better AI-generated summary is ready"""
+                if self.interrupted:
+                    return
+
+                # Send tool summary update to browser
+                await self.send_message({
+                    "type": "tool_summary_update",
+                    "tool": tool_name,
+                    "input": tool_input,
+                    "summary": better_summary
+                })
+
+                # Stream TTS audio for the tool summary
+                await self.stream_tts_audio(better_summary)
+
             # Execute Claude Code request with streaming
             result = await self.session.claude_client.execute_streaming(
                 prompt=content,
                 on_tool_use=on_tool_use,
+                on_tool_summary_update=on_tool_summary_update,
                 conversation_history=self.session.conversation.history,
             )
 
@@ -176,11 +194,12 @@ class WebSocketHandler:
             response_text = result["response"]
             tool_calls = result.get("tool_calls", [])
 
+
             # Add to conversation history
             self.session.conversation.add_assistant_message(response_text, tool_calls=tool_calls)
 
-            # Send final response to browser
-            await self.send_assistant_message(response_text, tool_calls)
+            # Send final response to browser (WITHOUT tool_calls - those were already streamed)
+            await self.send_assistant_message(response_text, tool_calls=None)
 
             # Stream TTS audio to browser
             if response_text and response_text.strip():

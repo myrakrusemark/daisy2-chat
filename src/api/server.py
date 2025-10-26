@@ -155,7 +155,7 @@ async def get_session(session_id: str):
 @app.delete("/api/sessions/{session_id}")
 async def delete_session(session_id: str):
     """Delete a session"""
-    success = session_manager.delete_session(session_id)
+    success = await session_manager.delete_session(session_id)
     if not success:
         raise HTTPException(status_code=404, detail="Session not found")
     return {"message": "Session deleted"}
@@ -196,7 +196,7 @@ async def update_session_config(session_id: str, config_update: ConfigUpdate):
         if not any(str(working_dir).startswith(allowed) for allowed in allowed_paths):
             raise HTTPException(status_code=400, detail="Working directory not allowed")
 
-    success = session_manager.update_session_config(
+    success = await session_manager.update_session_config(
         session_id=session_id,
         working_directory=working_dir,
         allowed_tools=config_update.allowed_tools,

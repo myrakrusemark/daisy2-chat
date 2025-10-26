@@ -54,10 +54,10 @@ class ClaudeCodeClient:
         self.claude_process = None  # Persistent subprocess for streaming
         self.claude_process_lock = asyncio.Lock()
 
-        # Initialize Anthropic client for tool summaries (if key provided)
+        # Initialize Anthropic async client for tool summaries (if key provided)
         self.anthropic_client = None
         if anthropic_api_key:
-            self.anthropic_client = anthropic.Anthropic(api_key=anthropic_api_key)
+            self.anthropic_client = anthropic.AsyncAnthropic(api_key=anthropic_api_key)
 
         # Ensure working directory exists
         self.working_directory.mkdir(parents=True, exist_ok=True)
@@ -235,7 +235,7 @@ class ClaudeCodeClient:
         """Start a persistent Claude Code process with stream-json I/O"""
         async with self.claude_process_lock:
             # Check if process already exists and is alive
-            if self.claude_process and self.claude_process.poll() is None:
+            if self.claude_process and self.claude_process.returncode is None:
                 log.info("Persistent Claude process already running")
                 return
 
@@ -243,7 +243,7 @@ class ClaudeCodeClient:
             if self.claude_process:
                 try:
                     self.claude_process.terminate()
-                    self.claude_process.wait(timeout=2)
+                    await self.claude_process.wait()
                 except:
                     self.claude_process.kill()
 
@@ -261,13 +261,12 @@ class ClaudeCodeClient:
 
             log.info(f"Starting persistent Claude process: {' '.join(cmd)}")
 
-            self.claude_process = subprocess.Popen(
-                cmd,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                bufsize=1,  # Line buffered
+            # Use asyncio subprocess for non-blocking I/O
+            self.claude_process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
                 cwd=str(self.working_directory)
             )
 
@@ -275,6 +274,22 @@ class ClaudeCodeClient:
             await asyncio.sleep(0.2)
 
             log.info(f"Persistent Claude process started (PID: {self.claude_process.pid})")
+
+    async def _summarize_and_update(self, tool_name: str, tool_input: dict, callback: Optional[Callable]):
+        """
+        Background task: Generate summary and call callback with better description.
+        This runs concurrently without blocking the main stdout reading loop.
+        """
+        if not callback:
+            return
+
+        try:
+            summary = await self.summarize_tool_use(tool_name, tool_input)
+            # Call the summary update callback with the better description
+            await callback(tool_name, tool_input, summary)
+            log.info(f"Generated and sent summary for {tool_name}: {summary}")
+        except Exception as e:
+            log.error(f"Error in background summarization: {e}")
 
     async def summarize_tool_use(self, tool_name: str, tool_input: dict) -> str:
         """Use Claude Haiku to summarize what a tool is doing"""
@@ -301,8 +316,8 @@ Examples:
 
 Reply with ONLY the specific summary sentence starting with a verb ending in -ing, no extra words."""
 
-            # Call Claude Haiku for fast summary
-            message = self.anthropic_client.messages.create(
+            # Call Claude Haiku for fast summary (async)
+            message = await self.anthropic_client.messages.create(
                 model="claude-3-haiku-20240307",
                 max_tokens=50,
                 messages=[{"role": "user", "content": prompt}]
@@ -320,6 +335,7 @@ Reply with ONLY the specific summary sentence starting with a verb ending in -in
         self,
         prompt: str,
         on_tool_use: Optional[Callable[[str, dict, str], None]] = None,
+        on_tool_summary_update: Optional[Callable[[str, dict, str], None]] = None,
         conversation_history: Optional[List[Dict[str, Any]]] = None
     ) -> Dict[str, Any]:
         """
@@ -327,6 +343,8 @@ Reply with ONLY the specific summary sentence starting with a verb ending in -in
 
         Args:
             prompt: User prompt to send to Claude
+            on_tool_use: Callback when a tool is used (immediate)
+            on_tool_summary_update: Callback when better summary is ready (delayed)
             on_tool_use: Callback when a tool is used (tool_name, tool_input, summary)
             conversation_history: Optional conversation history for context
 
@@ -347,31 +365,41 @@ Reply with ONLY the specific summary sentence starting with a verb ending in -in
 
         # Send to Claude's stdin
         try:
-            self.claude_process.stdin.write(json.dumps(json_message) + "\n")
-            self.claude_process.stdin.flush()
+            message_bytes = (json.dumps(json_message) + "\n").encode('utf-8')
+            self.claude_process.stdin.write(message_bytes)
+            await self.claude_process.stdin.drain()
             log.info("Sent message to persistent Claude process")
         except (BrokenPipeError, OSError) as e:
             log.error(f"Failed to write to Claude process: {e}")
             # Process died, restart and retry
             self.claude_process = None
             await self._start_persistent_claude()
-            self.claude_process.stdin.write(json.dumps(json_message) + "\n")
-            self.claude_process.stdin.flush()
+            message_bytes = (json.dumps(json_message) + "\n").encode('utf-8')
+            self.claude_process.stdin.write(message_bytes)
+            await self.claude_process.stdin.drain()
 
         # Now stream the response and collect events
         final_result = None
         result_received = False
         tool_calls = []
 
-        # Read output line by line in real-time
-        for line in self.claude_process.stdout:
-            if not line.strip():
+        # Read output line by line in real-time using async I/O
+        while True:
+            line_bytes = await self.claude_process.stdout.readline()
+            if not line_bytes:
+                # EOF reached
+                break
+
+            line = line_bytes.decode('utf-8').strip()
+            if not line:
                 continue
+
 
             try:
                 # Parse JSON streaming output
-                event = json.loads(line.strip())
+                event = json.loads(line)
                 event_type = event.get("type")
+
 
                 # Handle system init event
                 if event_type == "system":
@@ -382,6 +410,7 @@ Reply with ONLY the specific summary sentence starting with a verb ending in -in
                     message = event.get("message", {})
                     content = message.get("content", [])
 
+
                     for item in content:
                         item_type = item.get("type")
 
@@ -390,8 +419,6 @@ Reply with ONLY the specific summary sentence starting with a verb ending in -in
                             tool_name = item.get("name", "unknown")
                             tool_input = item.get("input", {})
 
-                            # Generate summary if callback and client available
-                            summary = await self.summarize_tool_use(tool_name, tool_input)
 
                             # Track tool call
                             tool_calls.append({
@@ -400,9 +427,16 @@ Reply with ONLY the specific summary sentence starting with a verb ending in -in
                                 "input": tool_input
                             })
 
-                            # Call callback if provided
+                            # Fire off callback immediately if provided (don't wait for summary)
                             if on_tool_use:
-                                await on_tool_use(tool_name, tool_input, summary)
+                                # Send immediate notification with basic info
+                                await on_tool_use(tool_name, tool_input, f"Using {tool_name}")
+
+                                # Then kick off background task to get better summary
+                                # This won't block the main loop
+                                asyncio.create_task(
+                                    self._summarize_and_update(tool_name, tool_input, on_tool_summary_update)
+                                )
 
                 # Check for final result event
                 elif event_type == "result":
@@ -430,13 +464,16 @@ Reply with ONLY the specific summary sentence starting with a verb ending in -in
                 "tool_calls": tool_calls,
             }
 
-    def cleanup(self):
+    async def cleanup(self):
         """Clean up persistent Claude process"""
         if self.claude_process:
             log.info("Terminating persistent Claude process...")
             try:
                 self.claude_process.terminate()
-                self.claude_process.wait(timeout=2)
+                await asyncio.wait_for(self.claude_process.wait(), timeout=2)
+            except asyncio.TimeoutError:
+                self.claude_process.kill()
+                await self.claude_process.wait()
             except:
                 self.claude_process.kill()
             log.info("Persistent Claude process terminated")

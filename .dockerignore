@@ -45,7 +45,7 @@ docker-compose.yml
 .gitlab-ci.yml
 
 # Local development
-.env
+# .env  # Commented out - needed for MCP servers
 .env.local
 *.log
 

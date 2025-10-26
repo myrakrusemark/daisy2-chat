@@ -27,6 +27,7 @@ COPY config/ ./config/
 COPY data/ ./data/
 COPY sandbox/ ./sandbox/
 COPY models/ ./models/
+COPY .env ./.env
 
 # Create necessary directories
 RUN mkdir -p /app/data/conversations /app/data/sandbox /app/sandbox
@@ -38,6 +39,9 @@ RUN useradd -m -u 1000 appuser && \
 # Switch to non-root user
 USER appuser
 
+# Install mcp-proxy as appuser
+RUN uv tool install mcp-proxy
+
 # Expose port
 EXPOSE 8000
 
@@ -46,6 +50,7 @@ ENV PYTHONUNBUFFERED=1
 ENV HOST=0.0.0.0
 ENV PORT=8000
 ENV LOG_LEVEL=INFO
+ENV PATH="/home/appuser/.local/bin:${PATH}"
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \

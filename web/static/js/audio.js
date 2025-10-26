@@ -32,6 +32,7 @@ class AudioManager {
 
         // Sound effects
         this.soundsEnabled = true;
+        this.audioInitialized = false;
         this.sounds = {
             wake: new Audio('/static/sounds/wake.mp3'),
             wakeWord: new Audio('/static/sounds/wake-word.mp3'),
@@ -47,6 +48,41 @@ class AudioManager {
         this.onEnd = null;
 
         this.setupRecognitionHandlers();
+        this.setupAudioInitialization();
+    }
+
+    /**
+     * Setup audio initialization on first user interaction
+     */
+    setupAudioInitialization() {
+        const initAudio = () => {
+            if (this.audioInitialized) return;
+
+            // Play and immediately pause all sounds to unlock audio
+            Object.values(this.sounds).forEach(sound => {
+                sound.volume = 0.01;
+                sound.play().then(() => {
+                    sound.pause();
+                    sound.currentTime = 0;
+                    sound.volume = 1.0;
+                }).catch(() => {
+                    // Ignore errors during initialization
+                });
+            });
+
+            this.audioInitialized = true;
+            console.log('Audio initialized');
+
+            // Remove listeners after initialization
+            document.removeEventListener('click', initAudio);
+            document.removeEventListener('keydown', initAudio);
+            document.removeEventListener('touchstart', initAudio);
+        };
+
+        // Listen for any user interaction
+        document.addEventListener('click', initAudio, { once: false });
+        document.addEventListener('keydown', initAudio, { once: false });
+        document.addEventListener('touchstart', initAudio, { once: false });
     }
 
     /**
@@ -293,6 +329,25 @@ class AudioManager {
     }
 
     /**
+     * Speak text using browser TTS (for quick feedback like tool summaries)
+     */
+    speakText(text) {
+        if (!window.speechSynthesis || !text) return;
+
+        // Don't cancel ongoing speech - let it queue naturally
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.rate = this.speechRate || 1.0;
+
+        // Use selected voice if available
+        if (this.selectedVoice) {
+            utterance.voice = this.selectedVoice;
+        }
+
+        console.log('Speaking tool summary:', text);
+        window.speechSynthesis.speak(utterance);
+    }
+
+    /**
      * Stop speaking
      */
     stopSpeaking() {
@@ -304,6 +359,11 @@ class AudioManager {
             this.currentAudio.pause();
             this.currentAudio.currentTime = 0;
             this.currentAudio = null;
+        }
+
+        // Stop browser TTS
+        if (window.speechSynthesis) {
+            window.speechSynthesis.cancel();
         }
     }
 

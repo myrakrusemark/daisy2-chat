@@ -29,6 +29,9 @@ services:
       - DEFAULT_WORKSPACE=/app/workspace
       - ALLOWED_WORKSPACE_PATHS=/app/workspace,/app/data
 
+      # MCP server configuration
+      - MCP_BASE_PATH=/app
+
     volumes:
       # Persist conversation history and data
       - ./data:/app/data:z

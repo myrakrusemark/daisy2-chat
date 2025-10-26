@@ -39,10 +39,6 @@
                         <span class="icon">🎤</span>
                         <span class="label">Push to Talk</span>
                     </button>
-                    <button id="btn-wake-word" class="mode-btn" title="Say 'computer' to activate">
-                        <span class="icon">👂</span>
-                        <span class="label">Wake Word</span>
-                    </button>
                 </div>
 
                 <!-- Status Display -->
@@ -50,11 +46,19 @@
                     Ready to assist
                 </div>
 
-                <!-- Stop Button -->
-                <button id="btn-stop" class="btn-stop" title="Stop current process (ESC)">
-                    <span class="icon">⏹️</span>
-                    <span class="label">Stop</span>
-                </button>
+                <!-- Bottom Controls -->
+                <div class="bottom-controls">
+                    <label class="wake-word-switch" title="Say 'computer' to activate">
+                        <span class="switch-text">Wake Word</span>
+                        <input type="checkbox" id="wake-word-toggle" checked>
+                        <span class="switch-slider"></span>
+                    </label>
+
+                    <button id="btn-stop" class="btn-stop" title="Stop current process (ESC)">
+                        <span class="icon">⏹️</span>
+                        <span class="label">Stop</span>
+                    </button>
+                </div>
             </div>
         </main>
 

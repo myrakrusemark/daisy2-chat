@@ -41,19 +41,48 @@ class UIComponents {
     /**
      * Add tool use indicator
      */
-    addToolUseIndicator(toolName, summary) {
+    addToolUseIndicator(toolName, summary, toolInput = null) {
         const indicatorEl = document.createElement('div');
         indicatorEl.className = 'message tool-use';
+
+        // Format tool input for display
+        let inputDisplay = '';
+        if (toolInput) {
+            const inputStr = JSON.stringify(toolInput, null, 2);
+            inputDisplay = `<div class="tool-input">${this.escapeHtml(inputStr)}</div>`;
+        }
+
         indicatorEl.innerHTML = `
             <div class="message-header">🔧 Tool Used</div>
             <div class="message-content">
                 <span class="tool-badge">${toolName}</span>
                 <span class="tool-summary">${summary}</span>
+                ${inputDisplay}
             </div>
             <div class="message-timestamp">${this.getTimestamp()}</div>
         `;
 
         this.appendMessage(indicatorEl);
+        return indicatorEl;
+    }
+
+    /**
+     * Update tool use indicator with better summary
+     */
+    updateToolSummary(indicatorEl, newSummary) {
+        const summaryEl = indicatorEl.querySelector('.tool-summary');
+        if (summaryEl) {
+            summaryEl.textContent = newSummary;
+        }
+    }
+
+    /**
+     * Escape HTML to prevent XSS
+     */
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
 
     /**

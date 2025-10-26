@@ -4,6 +4,13 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SANDBOX_DIR="/home/myra/cassistant-sandbox"
 COMPOSE_FILE="$SCRIPT_DIR/docker-compose.yml"
+BUILD_FLAG=""
+
+# Parse command line arguments
+if [ "$1" = "--build" ]; then
+    BUILD_FLAG="--build"
+    echo "Build flag detected - will rebuild container image"
+fi
 
 echo "Scanning for symlinks in $SANDBOX_DIR..."
 
@@ -60,10 +67,18 @@ fi
 rm "$TEMP_FILE"
 
 echo ""
-echo "Restarting container..."
-cd "$SCRIPT_DIR"
-docker-compose down
-docker-compose up -d
+if [ -n "$BUILD_FLAG" ]; then
+    echo "Rebuilding and restarting container..."
+    cd "$SCRIPT_DIR"
+    docker-compose down
+    docker-compose build
+    docker-compose up -d
+else
+    echo "Restarting container..."
+    cd "$SCRIPT_DIR"
+    docker-compose down
+    docker-compose up -d
+fi
 
 echo ""
 echo "Container restarted successfully!"

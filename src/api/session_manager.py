@@ -113,7 +113,7 @@ class SessionManager:
             session.last_activity = datetime.now()
         return session
 
-    def delete_session(self, session_id: str) -> bool:
+    async def delete_session(self, session_id: str) -> bool:
         """
         Delete a session
 
@@ -127,7 +127,7 @@ class SessionManager:
         if session:
             # Cleanup Claude client
             if hasattr(session.claude_client, 'cleanup'):
-                session.claude_client.cleanup()
+                await session.claude_client.cleanup()
             log.info(f"Deleted session {session_id} (remaining: {len(self.sessions)})")
             return True
         return False
@@ -145,7 +145,7 @@ class SessionManager:
             for session in self.sessions.values()
         ]
 
-    def _cleanup_inactive_sessions(self):
+    async def _cleanup_inactive_sessions(self):
         """Remove sessions that have been inactive"""
         now = datetime.now()
         to_remove = []
@@ -157,9 +157,9 @@ class SessionManager:
 
         for session_id in to_remove:
             log.info(f"Removing inactive session {session_id}")
-            self.delete_session(session_id)
+            await self.delete_session(session_id)
 
-    def update_session_config(
+    async def update_session_config(
         self,
         session_id: str,
         working_directory: Optional[Path] = None,
@@ -194,7 +194,7 @@ class SessionManager:
             session.config.claude.permission_mode = permission_mode
 
         # Recreate Claude client with new config
-        session.claude_client.cleanup()
+        await session.claude_client.cleanup()
         session.claude_client = ClaudeCodeClient(
             working_directory=session.config.working_directory,
             allowed_tools=session.config.claude.allowed_tools,
