@@ -4,10 +4,16 @@ FROM python:3.11-slim as base
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies (minimal - no audio libraries needed!)
+# Install system dependencies and Node.js for Claude CLI
 RUN apt-get update && apt-get install -y \
     git \
+    curl \
+    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
+
+# Install Claude Code CLI globally
+RUN npm install -g @anthropic-ai/claude-code
 
 # Copy pyproject.toml and install dependencies
 COPY pyproject.toml uv.lock* ./
@@ -20,9 +26,17 @@ COPY web/ ./web/
 COPY config/ ./config/
 COPY data/ ./data/
 COPY sandbox/ ./sandbox/
+COPY models/ ./models/
 
 # Create necessary directories
 RUN mkdir -p /app/data/conversations /app/data/sandbox /app/sandbox
+
+# Create non-root user
+RUN useradd -m -u 1000 appuser && \
+    chown -R appuser:appuser /app
+
+# Switch to non-root user
+USER appuser
 
 # Expose port
 EXPOSE 8000
@@ -38,4 +52,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import requests; requests.get('http://localhost:8000/health')"
 
 # Run the application
-CMD ["python", "-m", "api.server"]
+CMD ["python", "-m", "src.api.server"]

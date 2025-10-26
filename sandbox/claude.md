@@ -5,19 +5,40 @@
 This Claude Code instance is running within a voice-controlled assistant sandbox environment.
 
 ### Sandbox Structure
-- **Working Directory**: `./sandbox/`
-- **Home Symlink**: `sandbox/home/` → `/home/myra`
-- **Obsidian Vault Symlink**: `sandbox/ObsidianVault/` → `/run/media/myra/DropboxSD/Dropbox/Obsidian Vault/`
+- **Working Directory**: `/app/workspace/`
+- **Workspace Mount**: `/home/myra/cassistant-sandbox` is mounted to `/app/workspace/`
+- **Symlinks**: Symlinks in the cassistant-sandbox directory are automatically mounted as direct bind mounts in the container
+
+### Docker Container Management
+
+#### Updating Symlinks and Restarting Container
+When you add new symlinks to `/home/myra/cassistant-sandbox`, use the update script to automatically configure and restart the container:
+
+```bash
+/home/myra/cassistant/update-and-restart.sh
+```
+
+This script will:
+1. Scan `/home/myra/cassistant-sandbox` for all symlinks
+2. Update `docker-compose.yml` with bind mounts for each symlink target
+3. Restart the container with the updated configuration
+
+#### Current Symlinks
+The following symlinks are available in the workspace:
+- `Gold.md` → Obsidian Vault financial tracking
+- `Shopping-List.md` → Obsidian Vault shopping list
+- `ObsidianVault/` → Full Obsidian Vault directory
+- `drive-schedule` → Drive schedule script
 
 ### Permissions
-- **Read**: Allowed anywhere in the system
-- **Write/Edit/Replace**: Only allowed within the `sandbox/` directory (and its symlinked locations)
+- **Read**: Allowed anywhere accessible in the container
+- **Write/Edit/Replace**: Only allowed within `/app/workspace/` and mounted directories
 
 ## Shopping List
 
 ### Location
-- **File**: `sandbox/ObsidianVault/📌 Pinned/🛒 Shopping List.md`
-- **Vault Location**: `sandbox/ObsidianVault/`
+- **File**: `Shopping-List.md` (symlink in workspace)
+- **Actual Path**: `/run/media/myra/DropboxSD/Dropbox/Obsidian Vault/📌 Pinned/🛒 Shopping List.md`
 
 The shopping list is maintained in the Obsidian vault on the Dropbox SD card. It's organized by categories (Dry, Perishable, Misc) with checkboxes for tracking completed purchases.
 
@@ -25,9 +46,9 @@ The shopping list is maintained in the Obsidian vault on the Dropbox SD card. It
 
 When creating custom commands for Myra:
 
-1. **Create executable script** in `sandbox/home/.local/bin/` with the command name
+1. **Create executable script** in `/home/myra/.local/bin/` with the command name
 2. **Make it executable** with `chmod +x`
-3. **Update welcome message** in `sandbox/home/.zshrc` to include the new command with appropriate Nerd Font icon
+3. **Update welcome message** in `/home/myra/.zshrc` to include the new command with appropriate Nerd Font icon
 
 ### Welcome Message Format
 ```
@@ -50,14 +71,16 @@ When creating custom commands for Myra:
 ### Example Command Creation:
 ```bash
 # Create script
-echo '#!/bin/bash\ncd "/path/to/directory" && command' > sandbox/home/.local/bin/my-command
-chmod +x sandbox/home/.local/bin/my-command
+echo '#!/bin/bash\ncd "/path/to/directory" && command' > /home/myra/.local/bin/my-command
+chmod +x /home/myra/.local/bin/my-command
 
 # Add to welcome message in .zshrc
 echo "   󰈙  my-command       Description of command"
 ```
 
 Always update both the command script AND the welcome message when creating new custom commands.
+
+**Note**: These paths are on the host system, not in the container workspace.
 
 ## Reading Document Files
 
@@ -86,7 +109,7 @@ pandoc "filename.docx" -o output.pdf
 ### ssh-bs Command
 - **Purpose**: SSH to basement server
 - **Command**: `ssh-bs`
-- **Script location**: `sandbox/home/Scripts/ssh-basement-server.sh`
+- **Script location**: `/home/myra/Scripts/ssh-basement-server.sh`
 - **Connection**: `ssh -i ~/.ssh/myra-key-passwordless myra@nixos`
 
 #### File Transfer Usage:
@@ -101,11 +124,15 @@ scp -i ~/.ssh/myra-key-passwordless myra@nixos:/path/to/file.txt ./
 scp -i ~/.ssh/myra-key-passwordless -r directory/ myra@nixos:/path/to/destination/
 ```
 
+**Note**: SSH operations would need to be performed on the host system, not from within the container.
+
 ## Job Applications Folder
 
 ### Location
-- **CSV File**: `sandbox/home/applications/applications-status.csv`
-- **Applications Folder**: `sandbox/home/applications/applications/`
+- **CSV File**: `/home/myra/applications/applications-status.csv`
+- **Applications Folder**: `/home/myra/applications/applications/`
+
+**Note**: Job application files are on the host system. Access would require symlinks or direct mounts.
 
 ### Structure
 The job applications folder follows a consistent structure:
@@ -137,13 +164,13 @@ When user provides a job posting URL, follow this automated workflow:
    curl -s "URL" | pandoc -f html -t plain | head -n 400
    ```
 
-2. **Add to CSV**: Append new row to `sandbox/home/applications/applications-status.csv`
+2. **Add to CSV**: Append new row to `/home/myra/applications/applications-status.csv`
    - Format: `Position – Company (Location),~$XXK–$XXK,URL,New`
    - Default status: "New"
 
 3. **Create folder**: Create application subfolder with naming convention
    ```bash
-   mkdir -p "sandbox/home/applications/applications/[Company] - [Position]"
+   mkdir -p "/home/myra/applications/applications/[Company] - [Position]"
    ```
 
 4. **Create job-listing.txt**: Generate structured text file with:
@@ -167,12 +194,12 @@ When user requests to create a resume and cover letter for a specific position, 
 
 1. **Locate application folder**: Find the application subfolder matching the company/position name
    ```bash
-   find sandbox/home/applications/applications -type d -iname "*[company-name]*"
+   find /home/myra/applications/applications -type d -iname "*[company-name]*"
    ```
 
 2. **Read source materials**:
    - Read the `job-listing.txt` from the application folder
-   - Read `sandbox/home/applications/resume-template.txt` (master template with all experience, skills, and talking points)
+   - Read `/home/myra/applications/resume-template.txt` (master template with all experience, skills, and talking points)
 
 3. **Generate resume.txt**: Create a tailored resume that:
    - Emphasizes relevant experience and skills matching the job requirements
@@ -192,8 +219,8 @@ When user requests to create a resume and cover letter for a specific position, 
    - Uses company-specific talking points from template when available
 
 5. **Save files**: Create both files in the application folder:
-   - `sandbox/home/applications/applications/[Company] - [Position]/resume.txt`
-   - `sandbox/home/applications/applications/[Company] - [Position]/cover-letter.txt`
+   - `/home/myra/applications/applications/[Company] - [Position]/resume.txt`
+   - `/home/myra/applications/applications/[Company] - [Position]/cover-letter.txt`
 
 6. **Update status** (optional): Update CSV status to "Resume Ready" if materials are complete
 

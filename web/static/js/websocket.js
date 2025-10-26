@@ -19,6 +19,9 @@ class WebSocketClient {
         this.onToolUse = null;
         this.onProcessing = null;
         this.onError = null;
+        this.onTTSStart = null;
+        this.onTTSAudio = null;
+        this.onTTSEnd = null;
     }
 
     /**
@@ -115,6 +118,26 @@ class WebSocketClient {
                 console.error('Server error:', message.message);
                 if (this.onError) {
                     this.onError(message.message);
+                }
+                break;
+
+            case 'tts_start':
+                console.log('TTS start');
+                if (this.onTTSStart) {
+                    this.onTTSStart(message.text);
+                }
+                break;
+
+            case 'tts_audio':
+                if (this.onTTSAudio) {
+                    this.onTTSAudio(message.data);
+                }
+                break;
+
+            case 'tts_end':
+                console.log('TTS end');
+                if (this.onTTSEnd) {
+                    this.onTTSEnd();
                 }
                 break;
 

@@ -3,6 +3,7 @@
 import json
 import logging
 import asyncio
+import base64
 from typing import Callable, Optional
 from fastapi import WebSocket
 
@@ -16,6 +17,7 @@ from .models import (
     SessionInfoMessage,
 )
 from .session_manager import Session
+from .tts_service import TTSService
 
 log = logging.getLogger(__name__)
 
@@ -35,6 +37,9 @@ class WebSocketHandler:
         self.session = session
         self.processing = False
         self.interrupted = False
+
+        # Initialize TTS service
+        self.tts = TTSService()
 
     async def send_message(self, message_data: dict):
         """
@@ -83,6 +88,43 @@ class WebSocketHandler:
             input=tool_input,
             summary=summary
         ).model_dump())
+
+    async def stream_tts_audio(self, text: str):
+        """
+        Stream TTS audio to client
+
+        Args:
+            text: Text to synthesize and stream
+        """
+        try:
+            # Send TTS start message
+            await self.send_message({
+                "type": "tts_start",
+                "text": text
+            })
+
+            # Stream audio chunks
+            async for audio_chunk in self.tts.synthesize_streaming(text):
+                if self.interrupted:
+                    break
+
+                # Encode audio chunk as base64 for JSON transmission
+                audio_b64 = base64.b64encode(audio_chunk).decode('utf-8')
+
+                # Send audio chunk
+                await self.send_message({
+                    "type": "tts_audio",
+                    "data": audio_b64
+                })
+
+            # Send TTS end message
+            await self.send_message({
+                "type": "tts_end"
+            })
+
+        except Exception as e:
+            log.error(f"Error streaming TTS audio: {e}")
+            await self.send_error(f"TTS error: {str(e)}")
 
     async def handle_user_message(self, content: str):
         """
@@ -137,8 +179,12 @@ class WebSocketHandler:
             # Add to conversation history
             self.session.conversation.add_assistant_message(response_text, tool_calls=tool_calls)
 
-            # Send final response to browser for TTS
+            # Send final response to browser
             await self.send_assistant_message(response_text, tool_calls)
+
+            # Stream TTS audio to browser
+            if response_text and response_text.strip():
+                await self.stream_tts_audio(response_text)
 
             # Mark processing complete
             await self.send_processing("complete")

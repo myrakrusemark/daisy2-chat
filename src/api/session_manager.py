@@ -7,9 +7,9 @@ from datetime import datetime
 from typing import Dict, Optional, List
 from dataclasses import dataclass, field
 
-from voice_assistant.config import create_default_config, AssistantConfig
-from voice_assistant.claude.client import ClaudeCodeClient
-from voice_assistant.claude.conversation import ConversationManager
+from src.voice_assistant.config import create_default_config, AssistantConfig
+from src.voice_assistant.claude.client import ClaudeCodeClient
+from src.voice_assistant.claude.conversation import ConversationManager
 
 log = logging.getLogger(__name__)
 

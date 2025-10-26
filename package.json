@@ -1,0 +1,21 @@
+{
+  "name": "cassistant",
+  "version": "1.0.0",
+  "description": "A web-based voice AI assistant powered by Claude Code with browser-native speech recognition and text-to-speech.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@picovoice/porcupine-web": "^3.0.3",
+    "@picovoice/web-voice-processor": "^4.0.9",
+    "@xenova/transformers": "^2.17.2"
+  }
+}

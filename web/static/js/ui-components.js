@@ -43,12 +43,12 @@ class UIComponents {
      */
     addToolUseIndicator(toolName, summary) {
         const indicatorEl = document.createElement('div');
-        indicatorEl.className = 'message assistant';
+        indicatorEl.className = 'message tool-use';
         indicatorEl.innerHTML = `
-            <div class="message-header">🔧 Claude</div>
+            <div class="message-header">🔧 Tool Used</div>
             <div class="message-content">
-                <span class="tool-indicator">${toolName}</span>
-                <span>${summary}</span>
+                <span class="tool-badge">${toolName}</span>
+                <span class="tool-summary">${summary}</span>
             </div>
             <div class="message-timestamp">${this.getTimestamp()}</div>
         `;

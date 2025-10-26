@@ -26,18 +26,22 @@ services:
       - SESSION_TIMEOUT=${SESSION_TIMEOUT:-3600}
 
       # Working directory configuration
-      - DEFAULT_WORKSPACE=/app/sandbox
-      - ALLOWED_WORKSPACE_PATHS=/app/sandbox,/app/data/custom
+      - DEFAULT_WORKSPACE=/app/workspace
+      - ALLOWED_WORKSPACE_PATHS=/app/workspace,/app/data
 
     volumes:
-      # Persist conversation history
-      - ./data/conversations:/app/data/conversations
+      # Persist conversation history and data
+      - ./data:/app/data:z
 
-      # Persist sandbox workspace (optional)
-      - ./sandbox:/app/sandbox
+      # Main workspace
+      - /home/myra/cassistant-sandbox:/app/workspace:z
 
-      # Custom workspace (optional)
-      - ./data/custom:/app/data/custom
+      # Symlink targets mounted directly into workspace (auto-generated)
+      - /run/media/myra/DropboxSD/Dropbox/Obsidian Vault/📌 Pinned/Gold.md:/app/workspace/Gold.md:z
+      - /run/media/myra/DropboxSD/Dropbox/Obsidian Vault/📌 Pinned/🛒 Shopping List.md:/app/workspace/Shopping-List.md:z
+      - /run/media/myra/DropboxSD/Dropbox/Obsidian Vault:/app/workspace/ObsidianVault:z
+      - /home/myra/Scripts/drive-schedule:/app/workspace/drive-schedule:z
+      - /run/media/myra/DropboxSD/Dropbox/applications:/app/workspace/applications:z
 
     restart: unless-stopped
 

@@ -254,7 +254,7 @@ def main():
     log.info(f"Starting server on {host}:{port}")
 
     uvicorn.run(
-        "api.server:app",
+        "src.api.server:app",
         host=host,
         port=port,
         reload=os.getenv("RELOAD", "false").lower() == "true",

@@ -402,7 +402,7 @@ Reply with ONLY the specific summary sentence starting with a verb ending in -in
 
                             # Call callback if provided
                             if on_tool_use:
-                                on_tool_use(tool_name, tool_input, summary)
+                                await on_tool_use(tool_name, tool_input, summary)
 
                 # Check for final result event
                 elif event_type == "result":
