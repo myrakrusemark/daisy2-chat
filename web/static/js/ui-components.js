@@ -95,8 +95,8 @@ class UIComponents {
         const path = container.dataset.path;
         const fileName = path.split('/').pop();
 
-        // Get current session ID
-        const sessionId = window.sessionManager?.sessionId;
+        // Get current session ID from window.app
+        const sessionId = window.app?.sessionId;
         if (!sessionId) {
             container.innerHTML = '<div style="font-size: 12px; color: #e53e3e;">❌ No active session</div>';
             return;
@@ -120,28 +120,11 @@ class UIComponents {
 
             const data = await response.json();
 
-            // Display download link
+            // Display simple download link
             container.innerHTML = `
-                <div style="
-                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                    padding: 12px 16px;
-                    border-radius: 8px;
-                    display: inline-block;
-                ">
-                    <div style="color: white; font-size: 14px; font-weight: 600; margin-bottom: 4px;">
-                        📥 Download ${this.escapeHtml(fileName)}
-                    </div>
-                    <a href="${data.download_url}"
-                       target="_blank"
-                       style="
-                           color: white;
-                           text-decoration: underline;
-                           font-size: 12px;
-                           opacity: 0.9;
-                       ">${data.download_url}</a>
-                    <div style="color: rgba(255,255,255,0.7); font-size: 11px; margin-top: 4px;">
-                        Link expires in 10 minutes
-                    </div>
+                <div style="margin-top: 8px; font-size: 13px;">
+                    📥 <a href="${data.download_url}" target="_blank" style="color: #667eea; text-decoration: underline;">Download ${this.escapeHtml(fileName)}</a>
+                    <span style="color: #999; font-size: 11px; margin-left: 8px;">(expires in 10 min)</span>
                 </div>
             `;
 
