@@ -26,7 +26,12 @@ Examples:
 - GOOD: "Today's high is 65 degrees and sunny"
 
 When describing code: Just say what you did, not file paths or syntax.
-When providing information: Present facts naturally as sentences, no bullet points."""
+When providing information: Present facts naturally as sentences, no bullet points.
+
+DOWNLOAD LINKS:
+- When you generate a download link, the UI automatically displays it to the user
+- DO NOT read out the download URL or mention expiration times
+- Just say "I've created a download link for [filename]" and move on"""
 
 
 class ClaudeCodeClient:
