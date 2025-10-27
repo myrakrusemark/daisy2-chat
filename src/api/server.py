@@ -128,8 +128,8 @@ async def create_session(session_create: SessionCreate):
             working_directory=str(session.config.working_directory),
             conversation_id=session.conversation.conversation_id,
             tool_profile=session_create.tool_profile or "coding",
-            allowed_tools=session.config.claude.allowed_tools,
-            permission_mode=session.config.claude.permission_mode,
+            allowed_tools=session.config.allowed_tools,
+            permission_mode=session.config.permission_mode,
             created_at=session.created_at,
             last_activity=session.last_activity,
         )
@@ -158,9 +158,9 @@ async def get_session(session_id: str):
         session_id=session.session_id,
         working_directory=str(session.config.working_directory),
         conversation_id=session.conversation.conversation_id,
-        tool_profile=session.config.claude.permission_mode,
-        allowed_tools=session.config.claude.allowed_tools,
-        permission_mode=session.config.claude.permission_mode,
+        tool_profile=session.config.permission_mode,
+        allowed_tools=session.config.allowed_tools,
+        permission_mode=session.config.permission_mode,
         created_at=session.created_at,
         last_activity=session.last_activity,
     )

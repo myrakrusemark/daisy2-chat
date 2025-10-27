@@ -59,7 +59,7 @@ class WebSocketHandler:
             session_id=self.session.session_id,
             working_dir=str(self.session.config.working_directory),
             conversation_id=self.session.conversation.conversation_id,
-            tool_profile=self.session.config.claude.permission_mode,
+            tool_profile=self.session.config.permission_mode,
         ).model_dump())
 
     async def send_processing(self, status: str):
