@@ -1,5 +1,6 @@
 """Session manager for handling multiple concurrent sessions"""
 
+import os
 import uuid
 import logging
 from pathlib import Path
@@ -7,7 +8,6 @@ from datetime import datetime
 from typing import Dict, Optional, List
 from dataclasses import dataclass, field
 
-from src.voice_assistant.config import create_default_config, AssistantConfig
 from src.voice_assistant.claude.client import ClaudeCodeClient
 from src.voice_assistant.claude.conversation import ConversationManager
 
@@ -15,10 +15,20 @@ log = logging.getLogger(__name__)
 
 
 @dataclass
+class SessionConfig:
+    """Session configuration"""
+    working_directory: Path
+    allowed_tools: List[str]
+    permission_mode: str
+    api_key: str
+    conversations_dir: Path
+
+
+@dataclass
 class Session:
     """Active session state"""
     session_id: str
-    config: AssistantConfig
+    config: SessionConfig
     claude_client: ClaudeCodeClient
     conversation: ConversationManager
     created_at: datetime = field(default_factory=datetime.now)
@@ -71,20 +81,36 @@ class SessionManager:
         # Generate session ID
         session_id = uuid.uuid4().hex[:12]
 
+        # Set defaults
+        if not working_directory:
+            working_directory = Path("/app/workspace")
+
+        if not allowed_tools:
+            allowed_tools = [
+                "Bash", "Read", "Edit", "Write", "Glob", "Grep"
+            ]
+
+        if not permission_mode:
+            permission_mode = "bypassPermissions"
+
+        api_key = os.getenv("ANTHROPIC_API_KEY", "")
+        conversations_dir = Path("/app/data/conversations")
+
         # Create configuration
-        config = create_default_config(
-            working_directory=working_directory,
-            tool_profile=tool_profile,
+        config = SessionConfig(
+            working_directory=Path(working_directory),
             allowed_tools=allowed_tools,
             permission_mode=permission_mode,
+            api_key=api_key,
+            conversations_dir=conversations_dir
         )
 
         # Initialize Claude client
         claude_client = ClaudeCodeClient(
             working_directory=config.working_directory,
-            allowed_tools=config.claude.allowed_tools,
-            permission_mode=config.claude.permission_mode,
-            anthropic_api_key=config.claude.api_key,
+            allowed_tools=config.allowed_tools,
+            permission_mode=config.permission_mode,
+            anthropic_api_key=config.api_key,
         )
 
         # Initialize conversation manager
@@ -190,21 +216,20 @@ class SessionManager:
         # Update config
         if working_directory:
             session.config.working_directory = Path(working_directory)
-            session.config.claude.working_directory = Path(working_directory)
 
         if allowed_tools:
-            session.config.claude.allowed_tools = allowed_tools
+            session.config.allowed_tools = allowed_tools
 
         if permission_mode:
-            session.config.claude.permission_mode = permission_mode
+            session.config.permission_mode = permission_mode
 
         # Recreate Claude client with new config
         await session.claude_client.cleanup()
         session.claude_client = ClaudeCodeClient(
             working_directory=session.config.working_directory,
-            allowed_tools=session.config.claude.allowed_tools,
-            permission_mode=session.config.claude.permission_mode,
-            anthropic_api_key=session.config.claude.api_key,
+            allowed_tools=session.config.allowed_tools,
+            permission_mode=session.config.permission_mode,
+            anthropic_api_key=session.config.api_key,
         )
 
         log.info(f"Updated configuration for session {session_id}")
