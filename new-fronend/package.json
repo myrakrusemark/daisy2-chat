@@ -1,0 +1,25 @@
+{
+  "name": "claude-assistant-frontend",
+  "version": "1.0.0",
+  "description": "Eleventy-based frontend for Claude Assistant",
+  "scripts": {
+    "build:css": "tailwindcss -i src/css/input.css -o _site/css/output.css",
+    "watch:css": "tailwindcss -i src/css/input.css -o _site/css/output.css --watch",
+    "build:eleventy": "eleventy",
+    "watch:eleventy": "eleventy --serve",
+    "start": "npm-run-all build:css --parallel watch:css watch:eleventy",
+    "build": "npm-run-all build:css build:eleventy"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@11ty/eleventy": "^2.0.1",
+    "autoprefixer": "^10.4.21",
+    "daisyui": "^4.12.24",
+    "npm-run-all": "^4.1.5",
+    "postcss": "^8.5.6",
+    "postcss-cli": "^11.0.1",
+    "tailwindcss": "^3.4.18"
+  }
+}

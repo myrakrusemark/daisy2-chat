@@ -1,0 +1,39 @@
+{# Settings form field components #}
+
+{% macro textInput(id, label, placeholder, value, helpText) %}
+<div class="form-control">
+    <label class="label">
+        <span class="label-text font-semibold">{{ label }}</span>
+    </label>
+    <input
+        type="text"
+        id="{{ id }}"
+        placeholder="{{ placeholder }}"
+        {% if value %}value="{{ value }}"{% endif %}
+        class="input input-bordered input-sm w-full"
+    />
+    {% if helpText %}
+    <label class="label">
+        <span class="label-text-alt">{{ helpText }}</span>
+    </label>
+    {% endif %}
+</div>
+{% endmacro %}
+
+{% macro checkbox(id, label, checked) %}
+<div class="form-control">
+    <label class="label cursor-pointer justify-start gap-3">
+        <input type="checkbox" id="{{ id }}" class="checkbox checkbox-sm" {% if checked %}checked{% endif %} />
+        <span class="label-text">{{ label }}</span>
+    </label>
+</div>
+{% endmacro %}
+
+{% macro toggle(id, label, checked, size) %}
+<div class="form-control">
+    <label class="label cursor-pointer gap-2">
+        <span class="label-text {% if size == 'xs' %}text-xs{% endif %}">{{ label }}</span>
+        <input type="checkbox" id="{{ id }}" class="toggle {% if size == 'sm' or size == 'xs' %}toggle-sm{% endif %}" {% if checked %}checked{% endif %} />
+    </label>
+</div>
+{% endmacro %}
