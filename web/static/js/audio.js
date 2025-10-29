@@ -128,12 +128,23 @@ class AudioManager {
                 this.accumulatedTranscript = completeTranscript.trim();
             }
 
-            // For wake-word mode: start/reset silence timer on ANY speech (final or interim)
-            if (this.currentMode === 'wake-word' && (completeTranscript || interimTranscript)) {
-                this.clearSilenceTimer();
-                this.silenceTimer = setTimeout(() => {
-                    this.stopListening();
-                }, this.silenceTimeout);
+            // Store the last interim transcript for push-to-talk mode
+            if (interimTranscript) {
+                this.lastInterimTranscript = interimTranscript;
+            }
+
+            // For wake-word mode: start/reset silence timer only on meaningful speech
+            if (this.currentMode === 'wake-word') {
+                // Only reset timer if we have actual content (not empty/whitespace)
+                const hasContent = (completeTranscript && completeTranscript.trim()) ||
+                                   (interimTranscript && interimTranscript.trim());
+
+                if (hasContent) {
+                    this.clearSilenceTimer();
+                    this.silenceTimer = setTimeout(() => {
+                        this.stopListening();
+                    }, this.silenceTimeout);
+                }
             }
 
             // Show interim results for user feedback
@@ -156,13 +167,23 @@ class AudioManager {
             console.log('Speech recognition ended');
             this.isRecognitionActive = false;
 
-            // Send accumulated transcript if we have one
-            if (this.accumulatedTranscript.trim() && this.onTranscript) {
-                this.onTranscript(this.accumulatedTranscript.trim());
+            // Determine what to send
+            let transcriptToSend = this.accumulatedTranscript.trim();
+
+            // In push-to-talk mode, if we have no final transcript but have interim, use that
+            if (!transcriptToSend && this.lastInterimTranscript && this.currentMode === 'push-to-talk') {
+                transcriptToSend = this.lastInterimTranscript.trim();
+                console.log('Using interim transcript for push-to-talk:', transcriptToSend);
             }
 
-            // Clear the buffer
+            // Send transcript if we have one
+            if (transcriptToSend && this.onTranscript) {
+                this.onTranscript(transcriptToSend);
+            }
+
+            // Clear the buffers
             this.accumulatedTranscript = '';
+            this.lastInterimTranscript = '';
 
             if (this.onEnd) {
                 this.onEnd();
@@ -172,8 +193,9 @@ class AudioManager {
         this.recognition.onstart = () => {
             console.log('Speech recognition started');
             this.isRecognitionActive = true;
-            // Clear buffer when starting new recording
+            // Clear buffers when starting new recording
             this.accumulatedTranscript = '';
+            this.lastInterimTranscript = '';
         };
     }
 

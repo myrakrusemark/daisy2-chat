@@ -1,0 +1,240 @@
+/* State-based Theme System for Claude Assistant */
+/* Each state changes the entire screen's color scheme */
+
+/* DaisyUI Color Utilities (missing from output.css) */
+.bg-success {
+    background-color: oklch(0.72 0.19 142);
+}
+
+.bg-warning {
+    background-color: oklch(0.77 0.15 75);
+}
+
+.bg-error {
+    background-color: oklch(0.65 0.25 27);
+}
+
+.bg-primary {
+    background-color: oklch(0.57 0.24 237);
+}
+
+:root {
+    /* State color definitions */
+    --state-idle: oklch(0.25 0.03 240);           /* Dark blue-gray */
+    --state-listening: oklch(0.35 0.15 150);      /* Green */
+    --state-processing: oklch(0.30 0.12 280);     /* Purple */
+    --state-speaking: oklch(0.30 0.12 220);       /* Blue */
+    --state-connecting: oklch(0.35 0.10 60);      /* Yellow-orange */
+    --state-error: oklch(0.35 0.15 20);           /* Red */
+
+    /* Default to idle state */
+    --current-state-color: var(--state-idle);
+
+    /* Glass effect variables */
+    --glass-opacity: 0.1;
+    --glass-blur: 20px;
+}
+
+/* Body state classes - solid background colors */
+body {
+    transition: background-color 0.5s ease;
+    min-height: 100vh;
+    background-color: var(--current-state-color);
+}
+
+body.state-idle {
+    --current-state-color: var(--state-idle);
+    background-color: var(--state-idle);
+}
+
+body.state-listening {
+    --current-state-color: var(--state-listening);
+    background-color: var(--state-listening);
+}
+
+body.state-processing {
+    --current-state-color: var(--state-processing);
+    background-color: var(--state-processing);
+}
+
+body.state-speaking {
+    --current-state-color: var(--state-speaking);
+    background-color: var(--state-speaking);
+}
+
+body.state-connecting {
+    --current-state-color: var(--state-connecting);
+    background-color: var(--state-connecting);
+}
+
+body.state-error {
+    --current-state-color: var(--state-error);
+    background-color: var(--state-error);
+}
+
+/* Navbar - completely transparent */
+.navbar {
+    background: transparent !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    border: none !important;
+}
+
+/* Drawer sidebar styling */
+.drawer-side .menu {
+    background: rgba(0, 0, 0, 0.6) !important;
+    backdrop-filter: blur(var(--glass-blur)) !important;
+    -webkit-backdrop-filter: blur(var(--glass-blur)) !important;
+}
+
+/* Chat bubbles */
+.chat-bubble-primary {
+    background: rgba(59, 130, 246, 0.3);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(59, 130, 246, 0.4);
+    color: rgba(255, 255, 255, 0.95);
+}
+
+.chat-bubble-secondary {
+    background: rgba(100, 100, 100, 0.3);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.95);
+}
+
+/* Glass tool display */
+.glass-tool-display {
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 0.75rem;
+    transition: all 0.2s ease;
+}
+
+.glass-tool-display:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* Glass buttons */
+.glass-button {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    transition: all 0.3s ease;
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.glass-button:hover {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.3);
+    transform: translateY(-2px);
+}
+
+.glass-button:active {
+    transform: translateY(0);
+}
+
+/* Push to Talk button - state-aware */
+#btn-push-to-talk {
+    background: linear-gradient(135deg,
+        rgba(59, 130, 246, 0.6) 0%,
+        rgba(37, 99, 235, 0.6) 100%);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 2px solid rgba(59, 130, 246, 0.8);
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 20px rgba(59, 130, 246, 0.4);
+}
+
+#btn-push-to-talk:hover {
+    background: linear-gradient(135deg,
+        rgba(59, 130, 246, 0.8) 0%,
+        rgba(37, 99, 235, 0.8) 100%);
+    transform: scale(1.05);
+    box-shadow: 0 6px 30px rgba(59, 130, 246, 0.6);
+}
+
+#btn-push-to-talk:active,
+#btn-push-to-talk.btn-active {
+    background: linear-gradient(135deg,
+        rgba(34, 197, 94, 0.8) 0%,
+        rgba(21, 128, 61, 0.8) 100%);
+    border-color: rgba(34, 197, 94, 1);
+    box-shadow: 0 0 40px rgba(34, 197, 94, 0.8);
+    transform: scale(0.95);
+}
+
+body.state-listening #btn-push-to-talk {
+    animation: pulse-glow 2s infinite;
+}
+
+/* Pulse glow animation */
+@keyframes pulse-glow {
+    0%, 100% {
+        box-shadow: 0 0 20px rgba(34, 197, 94, 0.6);
+        opacity: 1;
+    }
+    50% {
+        box-shadow: 0 0 40px rgba(34, 197, 94, 1);
+        opacity: 0.9;
+    }
+}
+
+/* Controls area - completely transparent */
+.controls-area {
+    background: transparent !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    border: none !important;
+}
+
+/* Modal styling */
+.modal-box {
+    background: rgba(20, 20, 20, 0.95);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.2);
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.5);
+}
+
+/* Smooth transitions for all interactive elements */
+button, input, select, .toggle {
+    transition: all 0.2s ease;
+}
+
+/* Welcome hero section */
+.hero {
+    background: rgba(0, 0, 0, 0.2);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-radius: 1rem;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    :root {
+        --glass-blur: 15px;
+    }
+}

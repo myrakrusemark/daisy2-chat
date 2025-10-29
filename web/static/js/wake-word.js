@@ -185,3 +185,6 @@ class WakeWordManager {
 //
 // For now, this uses Web Speech API continuous recognition as a functional
 // fallback that still provides wake word functionality.
+
+// Export for use in other modules
+window.WakeWordManager = WakeWordManager;

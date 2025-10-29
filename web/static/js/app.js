@@ -2,11 +2,13 @@
  * Main application logic - Orchestrates audio, WebSocket, and UI
  */
 
+import { applyState } from './state-themes.js';
+
 class ClaudeAssistant {
     constructor() {
-        // Initialize components
-        this.audio = new AudioManager();
-        this.ui = new UIComponents();
+        // Initialize components (access from window for non-module scripts)
+        this.audio = new window.AudioManager();
+        this.ui = new window.UIComponents();
         this.ws = null;
         this.sessionId = null;
         this.wakeWord = null;
@@ -30,7 +32,7 @@ class ClaudeAssistant {
      * Check browser compatibility
      */
     checkCompatibility() {
-        const compat = AudioManager.checkCompatibility();
+        const compat = window.AudioManager.checkCompatibility();
 
         if (!compat.supported) {
             this.ui.showBrowserWarning(compat.issues);
@@ -83,7 +85,7 @@ class ClaudeAssistant {
      * Connect WebSocket
      */
     connectWebSocket() {
-        this.ws = new WebSocketClient(this.sessionId);
+        this.ws = new window.WebSocketClient(this.sessionId);
 
         // Setup WebSocket callbacks
         this.ws.onConnect = () => {
@@ -172,6 +174,7 @@ class ClaudeAssistant {
 
         this.ws.onTTSStart = (text) => {
             console.log('TTS stream starting');
+            applyState('speaking');
             this.audio.startTTSStream();
         };
 
@@ -187,6 +190,7 @@ class ClaudeAssistant {
                 // Only play sleep sound and reset state if this was the final response
                 // (not a tool summary)
                 if (!this.speakingToolSummary) {
+                    applyState('idle');
                     this.ui.setStatus('Ready to assist');
                     this.isProcessing = false;
 
@@ -223,14 +227,20 @@ class ClaudeAssistant {
         };
 
         this.audio.onEnd = () => {
-            this.stopListening();
+            console.log('Audio recognition ended, mode:', this.activationMode);
 
-            // If in wake word mode, restart wake word listening after command completes
-            if (this.activationMode === 'wake-word' && this.wakeWord) {
-                setTimeout(() => {
-                    this.wakeWord.startListening();
-                    this.ui.setStatus('Listening for wake word: "computer"');
-                }, 1000);
+            // Only auto-stop for wake-word mode, not push-to-talk
+            // In push-to-talk, user controls when to stop by releasing button
+            if (this.activationMode === 'wake-word') {
+                this.stopListening();
+
+                // Restart wake word listening after command completes
+                if (this.wakeWord) {
+                    setTimeout(() => {
+                        this.wakeWord.startListening();
+                        this.ui.setStatus('Listening for wake word: "computer"');
+                    }, 1000);
+                }
             }
         };
 
@@ -278,22 +288,33 @@ class ClaudeAssistant {
             }
         });
 
-        // Activation mode buttons
-        document.getElementById('btn-push-to-talk').addEventListener('mousedown', () => {
-            // Allow interrupting TTS by stopping speech
+        // Push-to-talk button setup
+        const pttBtn = document.getElementById('btn-push-to-talk');
+
+        // Prevent context menu on long press
+        pttBtn.addEventListener('contextmenu', (e) => e.preventDefault());
+
+        // Handler for starting push-to-talk (mouse/touch)
+        const startPTT = (e) => {
+            e.preventDefault();
             if (this.isProcessing) {
                 this.audio.stopSpeaking();
                 this.isProcessing = false;
             }
             this.setActivationMode('push-to-talk');
             this.startListening();
-        });
+        };
 
-        document.getElementById('btn-push-to-talk').addEventListener('mouseup', () => {
+        // Handler for stopping push-to-talk (mouse/touch)
+        const stopPTT = (e) => {
             if (this.activationMode === 'push-to-talk') {
                 this.stopListening();
             }
-        });
+        };
+
+        // Attach both mouse and touch events
+        ['mousedown', 'touchstart'].forEach(evt => pttBtn.addEventListener(evt, startPTT));
+        ['mouseup', 'touchend'].forEach(evt => pttBtn.addEventListener(evt, stopPTT));
 
         document.getElementById('wake-word-toggle').addEventListener('change', (e) => {
             if (e.target.checked) {
@@ -342,25 +363,36 @@ class ClaudeAssistant {
     }
 
     /**
-     * Start listening for speech
+     * Start listening for speech with state integration
      */
     startListening() {
         if (this.isListening) return;
 
+        // Temporarily pause wake word detection if it's running
+        if (this.wakeWord && this.wakeWord.isListening) {
+            console.log('Pausing wake word for push-to-talk');
+            this.wakeWord.stopListening();
+        }
+
         const success = this.audio.startListening(this.activationMode);
         if (success) {
             this.isListening = true;
+            applyState('listening');
             this.ui.setStatus('Listening... speak now');
+
+            // Play wake sound for audio feedback
+            this.audio.playSound('wake');
 
             // Update mode button
             if (this.activationMode === 'push-to-talk') {
-                document.getElementById('btn-push-to-talk').classList.add('listening');
+                const btn = document.getElementById('btn-push-to-talk');
+                btn.classList.add('btn-active');
             }
         }
     }
 
     /**
-     * Stop listening
+     * Stop listening with state integration
      */
     stopListening() {
         if (!this.isListening) return;
@@ -369,12 +401,23 @@ class ClaudeAssistant {
         this.isListening = false;
 
         // Update mode button
-        document.querySelectorAll('.mode-btn').forEach(btn => {
-            btn.classList.remove('listening');
-        });
+        const btn = document.getElementById('btn-push-to-talk');
+        if (btn) {
+            btn.classList.remove('btn-active');
+        }
 
         if (!this.isProcessing) {
+            applyState('idle');
             this.ui.setStatus('Ready to assist');
+        }
+
+        // Resume wake word detection if wake word toggle is checked
+        const wakeWordToggle = document.getElementById('wake-word-toggle');
+        if (wakeWordToggle && wakeWordToggle.checked && this.wakeWord && !this.wakeWord.isListening) {
+            console.log('Resuming wake word detection');
+            setTimeout(() => {
+                this.wakeWord.startListening();
+            }, 500);
         }
     }
 
@@ -468,7 +511,7 @@ class ClaudeAssistant {
 
         // Initialize wake word manager if not already done
         if (!this.wakeWord) {
-            this.wakeWord = new WakeWordManager();
+            this.wakeWord = new window.WakeWordManager();
 
             // Set up callbacks
             this.wakeWord.onWakeWordDetected = (data) => {
@@ -479,7 +522,8 @@ class ClaudeAssistant {
                 // Temporarily stop wake word listening
                 this.wakeWord.stopListening();
 
-                // Start regular listening for the command
+                // Set mode to wake-word and start listening for the command
+                this.setActivationMode('wake-word');
                 this.startListening();
             };
 

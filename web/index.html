@@ -1,143 +1,221 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Claude Assistant</title>
-    <link rel="stylesheet" href="/static/css/styles.css">
+    <link rel="stylesheet" href="/static/css/output.css">
+    <link rel="stylesheet" href="/static/css/state-themes.css">
 </head>
-<body>
-    <div class="container">
-        <!-- Header -->
-        <header class="header">
-            <div class="header-content">
-                <h1>Claude Assistant</h1>
-                <div class="session-info">
-                    <span id="session-id" class="session-badge">Connecting...</span>
-                    <span id="connection-status" class="status-indicator connecting"></span>
-                </div>
-            </div>
-        </header>
+<body class="state-idle min-h-screen">
+    <!-- Main Drawer Layout (Mobile/Tablet Settings) -->
+    <div class="drawer lg:drawer-open min-h-screen">
+        <input id="settings-drawer" type="checkbox" class="drawer-toggle" />
 
         <!-- Main Content -->
-        <main class="main">
-            <!-- Conversation Display -->
-            <div class="conversation-container">
-                <div id="conversation" class="conversation">
-                    <div class="welcome-message">
-                        <h2>Welcome to Claude Assistant</h2>
-                        <p>Click one of the activation modes below to start</p>
+        <div class="drawer-content flex flex-col min-h-screen">
+            <!-- Navbar/Header -->
+            <div class="navbar sticky top-0 z-10">
+                <div class="flex-none lg:hidden">
+                    <label for="settings-drawer" class="btn btn-square btn-ghost">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="inline-block w-5 h-5 stroke-current">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+                        </svg>
+                    </label>
+                </div>
+                <div class="flex-1">
+                    <span id="session-id" class="text-sm font-mono opacity-70 ml-2">Connecting...</span>
+                </div>
+                <div class="flex-none gap-2 flex items-center">
+                    <!-- Wake Word Toggle -->
+                    <div class="form-control">
+                        <label class="label cursor-pointer gap-2">
+                            <span class="label-text text-xs">Wake Word</span>
+                            <input type="checkbox" id="wake-word-toggle" class="toggle toggle-sm" checked />
+                        </label>
+                    </div>
+
+                    <!-- Connection Status Indicator -->
+                    <span id="connection-status" class="w-3 h-3 rounded-full bg-warning"></span>
+                </div>
+            </div>
+
+            <!-- Conversation Area -->
+            <div class="flex-1 flex flex-col overflow-hidden">
+                <div class="flex-1 overflow-y-auto p-4 sm:p-6">
+                    <div id="conversation" class="mx-auto space-y-4 max-w-3xl">
+                        <!-- Messages will be dynamically added here -->
+                    </div>
+                </div>
+
+                <!-- Controls Bar (Fixed Bottom) -->
+                <div class="controls-area p-4 sm:p-6">
+                    <div class="mx-auto space-y-4 max-w-3xl">
+                        <!-- Primary Action Buttons -->
+                        <div class="flex justify-center items-center gap-6">
+                            <!-- Keyboard Button (future feature) -->
+                            <button id="btn-keyboard" class="glass-button w-12 h-12 rounded-full" style="visibility: hidden;">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6 mx-auto">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25H12" />
+                                </svg>
+                            </button>
+
+                            <!-- Push to Talk Button -->
+                            <button id="btn-push-to-talk" class="w-20 h-20 rounded-full"></button>
+
+                            <!-- Stop Button -->
+                            <button id="btn-stop" class="glass-button w-12 h-12 rounded-full" style="visibility: hidden;">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6 mx-auto">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M5.25 7.5A2.25 2.25 0 017.5 5.25h9a2.25 2.25 0 012.25 2.25v9a2.25 2.25 0 01-2.25 2.25h-9a2.25 2.25 0 01-2.25-2.25v-9z" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        <!-- Status Display -->
+                        <div id="status-display" class="text-center text-sm text-base-content/70 min-h-[1.5rem]">
+                            Ready to assist
+                        </div>
                     </div>
                 </div>
             </div>
+        </div>
 
-            <!-- Controls -->
-            <div class="controls">
-                <!-- Activation Mode Selector -->
-                <div class="activation-modes">
-                    <button id="btn-push-to-talk" class="mode-btn" title="Hold to speak">
-                        <span class="icon">🎤</span>
-                        <span class="label">Push to Talk</span>
-                    </button>
+        <!-- Settings Drawer (Sidebar) -->
+        <div class="drawer-side z-20">
+            <label for="settings-drawer" class="drawer-overlay"></label>
+            <div class="menu p-4 w-80 min-h-full text-base-content">
+                <!-- Drawer Header -->
+                <div class="flex items-center gap-2 mb-6 px-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    <h2 class="text-xl font-bold">Settings</h2>
                 </div>
 
-                <!-- Status Display -->
-                <div id="status-display" class="status-display">
-                    Ready to assist
-                </div>
+                <!-- Settings Form -->
+                <div class="space-y-6">
+                    <!-- Working Directory -->
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text font-semibold">Working Directory</span>
+                        </label>
+                        <input
+                            type="text"
+                            id="working-directory"
+                            placeholder="/app/workspace"
+                            value="/app/workspace"
+                            class="input input-bordered input-sm w-full"
+                        />
+                        <label class="label">
+                            <span class="label-text-alt">Path where Claude will operate</span>
+                        </label>
+                    </div>
 
-                <!-- Bottom Controls -->
-                <div class="bottom-controls">
-                    <label class="wake-word-switch" title="Say 'computer' to activate">
-                        <span class="switch-text">Wake Word</span>
-                        <input type="checkbox" id="wake-word-toggle" checked>
-                        <span class="switch-slider"></span>
-                    </label>
+                    <!-- Tool Profile -->
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text font-semibold">Tool Profile</span>
+                        </label>
+                        <select id="tool-profile" class="select select-bordered select-sm w-full">
+                            <option value="safe">Safe (Read-only)</option>
+                            <option value="coding" selected>Coding (Balanced)</option>
+                            <option value="full">Full (All tools)</option>
+                        </select>
+                        <label class="label">
+                            <span class="label-text-alt">Controls which tools Claude can use</span>
+                        </label>
+                    </div>
 
-                    <button id="btn-stop" class="btn-stop" title="Stop current process (ESC)">
-                        <span class="icon">⏹️</span>
-                        <span class="label">Stop</span>
-                    </button>
+                    <!-- Permission Mode -->
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text font-semibold">Permission Mode</span>
+                        </label>
+                        <select id="permission-mode" class="select select-bordered select-sm w-full">
+                            <option value="bypassPermissions" selected>Bypass (Auto-approve)</option>
+                            <option value="requireApproval">Require Approval</option>
+                        </select>
+                        <label class="label">
+                            <span class="label-text-alt">How tool usage is approved</span>
+                        </label>
+                    </div>
+
+                    <!-- TTS Info -->
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text font-semibold">TTS Engine</span>
+                        </label>
+                        <p class="text-sm text-base-content/70 px-1">
+                            Transformers.js (Speecht5)<br>
+                            <span class="text-xs text-base-content/50">Neural TTS running in browser</span>
+                        </p>
+                    </div>
+
+                    <!-- Sound Effects -->
+                    <div class="form-control">
+                        <label class="label cursor-pointer justify-start gap-3">
+                            <input type="checkbox" id="enable-sounds" class="checkbox checkbox-sm" checked />
+                            <span class="label-text">Enable sound effects</span>
+                        </label>
+                    </div>
+
+                    <div class="divider my-2"></div>
+
+                    <!-- Session Management -->
+                    <div class="space-y-2">
+                        <button id="btn-new-session" class="btn btn-outline btn-sm w-full">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                            </svg>
+                            New Session
+                        </button>
+                        <button id="btn-clear-conversation" class="btn btn-outline btn-sm w-full">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                            Clear Conversation
+                        </button>
+                    </div>
                 </div>
             </div>
-        </main>
-
-        <!-- Settings Panel (Collapsible) -->
-        <aside class="settings-panel collapsed">
-            <button id="btn-toggle-settings" class="settings-toggle">⚙️ Settings</button>
-
-            <div class="settings-content">
-                <!-- Working Directory -->
-                <div class="setting-group">
-                    <label for="working-directory">Working Directory</label>
-                    <input
-                        type="text"
-                        id="working-directory"
-                        placeholder="/app/workspace"
-                        value="/app/workspace"
-                    >
-                    <small>Path where Claude will operate</small>
-                </div>
-
-                <!-- Tool Allowlist Profile -->
-                <div class="setting-group">
-                    <label for="tool-profile">Tool Profile</label>
-                    <select id="tool-profile">
-                        <option value="safe">Safe (Read-only)</option>
-                        <option value="coding" selected>Coding (Balanced)</option>
-                        <option value="full">Full (All tools)</option>
-                    </select>
-                </div>
-
-                <!-- Permission Mode -->
-                <div class="setting-group">
-                    <label for="permission-mode">Permission Mode</label>
-                    <select id="permission-mode">
-                        <option value="bypassPermissions" selected>Bypass (Auto-approve)</option>
-                        <option value="requireApproval">Require Approval</option>
-                    </select>
-                </div>
-
-                <!-- TTS Info -->
-                <div class="setting-group">
-                    <label>TTS Engine</label>
-                    <p style="font-size: 0.9em; color: #666; margin: 0;">
-                        Transformers.js (Speecht5)<br>
-                        <small>Neural TTS running in browser</small>
-                    </p>
-                </div>
-
-                <!-- Sound Effects Toggle -->
-                <div class="setting-group">
-                    <label>
-                        <input type="checkbox" id="enable-sounds" checked>
-                        Enable sound effects
-                    </label>
-                </div>
-
-                <!-- Session Management -->
-                <div class="setting-group">
-                    <button id="btn-new-session" class="btn-secondary">New Session</button>
-                    <button id="btn-clear-conversation" class="btn-secondary">Clear Conversation</button>
-                </div>
-            </div>
-        </aside>
-    </div>
-
-    <!-- Browser Compatibility Warning -->
-    <div id="browser-warning" class="browser-warning hidden">
-        <div class="warning-content">
-            <h3>⚠️ Browser Compatibility Notice</h3>
-            <p id="browser-warning-text"></p>
-            <button id="btn-dismiss-warning">Continue Anyway</button>
         </div>
     </div>
 
+    <!-- Browser Compatibility Warning Modal -->
+    <dialog id="browser-warning" class="modal">
+        <div class="modal-box">
+            <h3 class="font-bold text-lg text-warning flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                Browser Compatibility Notice
+            </h3>
+            <p id="browser-warning-text" class="py-4"></p>
+            <div class="modal-action">
+                <button id="btn-dismiss-warning" class="btn btn-primary">Continue Anyway</button>
+            </div>
+        </div>
+    </dialog>
+
     <!-- Scripts -->
+    <script src="/static/js/state-themes.js" type="module"></script>
     <script src="/static/js/audio.js"></script>
     <script src="/static/js/websocket.js"></script>
-    <script src="/static/js/ui-components.js"></script>
+    <script src="/static/js/ui-components.js" type="module"></script>
     <script src="/static/js/wake-word.js"></script>
-    <script src="/static/js/app.js"></script>
+    <script src="/static/js/app.js" type="module"></script>
+
+    <script>
+        // Auto-open drawer on desktop, keep closed on mobile
+        const drawer = document.getElementById('settings-drawer');
+        const updateDrawerState = () => {
+            if (window.innerWidth >= 1024) { // lg breakpoint
+                drawer.checked = true;
+            }
+        };
+        updateDrawerState();
+        window.addEventListener('resize', updateDrawerState);
+    </script>
 </body>
 </html>

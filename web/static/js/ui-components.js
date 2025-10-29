@@ -2,6 +2,8 @@
  * UI Components - Handle UI updates and interactions
  */
 
+import { applyState } from './state-themes.js';
+
 class UIComponents {
     constructor() {
         // Get DOM elements
@@ -39,39 +41,32 @@ class UIComponents {
     }
 
     /**
-     * Add tool use indicator
+     * Add tool use indicator with new styling
      */
     addToolUseIndicator(toolName, summary, toolInput = null) {
         const indicatorEl = document.createElement('div');
-        indicatorEl.className = 'message tool-use';
-
-        // Format tool input for display
-        let inputDisplay = '';
-        if (toolInput) {
-            const inputStr = JSON.stringify(toolInput, null, 2);
-            inputDisplay = `<div class="tool-input">${this.escapeHtml(inputStr)}</div>`;
-        }
+        indicatorEl.className = 'flex justify-start mb-2';
 
         // Check if this is a download link generation tool
         let downloadLink = '';
         if ((toolName === 'generate_download_link' || toolName === 'mcp__file-downloads__generate_download_link') && toolInput && toolInput.path) {
             const fileName = toolInput.path.split('/').pop();
             downloadLink = `
-                <div class="download-link-container" style="margin-top: 12px;" data-path="${this.escapeHtml(toolInput.path)}">
-                    <div style="font-size: 12px; color: #666; margin-bottom: 4px;">Generating download link...</div>
+                <div class="download-link-container mt-2" data-path="${this.escapeHtml(toolInput.path)}">
+                    <div class="text-xs opacity-70">Generating download link...</div>
                 </div>
             `;
         }
 
         indicatorEl.innerHTML = `
-            <div class="message-header">🔧 Tool Used</div>
-            <div class="message-content">
-                <span class="tool-badge">${toolName}</span>
-                <span class="tool-summary">${summary}</span>
-                ${inputDisplay}
-                ${downloadLink}
+            <div class="max-w-[80%]">
+                <div class="glass-tool-display px-4 py-3 opacity-70">
+                    <div class="text-xs font-mono">
+                        <strong>${toolName}</strong> — <em>${summary}</em>
+                    </div>
+                    ${downloadLink}
+                </div>
             </div>
-            <div class="message-timestamp">${this.getTimestamp()}</div>
         `;
 
         // Generate download link if needed
@@ -154,29 +149,38 @@ class UIComponents {
     }
 
     /**
-     * Create message element
+     * Create message element with new DaisyUI styling
      */
     createMessageElement(role, content, toolCalls = []) {
         const messageEl = document.createElement('div');
-        messageEl.className = `message ${role}`;
+        const isUser = role === 'user';
 
-        const headerText = role === 'user' ? '👤 You' : '🤖 Claude';
+        messageEl.className = `flex ${isUser ? 'justify-end' : 'justify-start'} mb-6`;
+
+        const roleLabel = isUser ? 'You' : 'Claude';
+        const bubbleClass = isUser ? 'chat-bubble-primary' : 'chat-bubble-secondary';
 
         let toolsHtml = '';
         if (toolCalls && toolCalls.length > 0) {
-            toolsHtml = '<div class="tools-used">' +
-                toolCalls.map(tool => {
-                    const count = tool.count ? ` (${tool.count}x)` : '';
-                    return `<span class="tool-indicator">${tool.name}${count}</span>`;
-                }).join('') +
-                '</div>';
+            toolsHtml = toolCalls.map(tool => {
+                const count = tool.count ? ` (${tool.count}×)` : '';
+                return `<div class="glass-tool-display px-4 py-3 mb-2 opacity-70">
+                    <div class="text-xs font-mono"><strong>${tool.name}</strong>${count}</div>
+                </div>`;
+            }).join('');
         }
 
         messageEl.innerHTML = `
-            <div class="message-header">${headerText}</div>
-            <div class="message-content">${this.escapeHtml(content)}</div>
-            ${toolsHtml}
-            <div class="message-timestamp">${this.getTimestamp()}</div>
+            <div class="max-w-[80%]">
+                <div class="text-xs opacity-70 mb-1 px-2">
+                    ${roleLabel}
+                    <time class="ml-2">${this.getTimestamp()}</time>
+                </div>
+                ${toolsHtml}
+                <div class="rounded-2xl px-4 py-3 ${bubbleClass}">
+                    ${this.escapeHtml(content)}
+                </div>
+            </div>
         `;
 
         return messageEl;
@@ -186,12 +190,6 @@ class UIComponents {
      * Append message to conversation
      */
     appendMessage(messageEl) {
-        // Remove welcome message if it exists
-        const welcomeEl = this.conversationEl.querySelector('.welcome-message');
-        if (welcomeEl) {
-            welcomeEl.remove();
-        }
-
         this.conversationEl.appendChild(messageEl);
 
         // Scroll to bottom
@@ -199,16 +197,21 @@ class UIComponents {
     }
 
     /**
-     * Update status display
+     * Update status display with state theme integration
      */
     setStatus(status, type = 'normal') {
         this.statusEl.textContent = status;
-        this.statusEl.className = 'status-display';
 
+        // Map old status types to new state system
         if (type === 'processing') {
-            this.statusEl.classList.add('processing');
+            applyState('processing');
         } else if (type === 'error') {
-            this.statusEl.classList.add('error');
+            applyState('error');
+        } else if (type === 'normal') {
+            // Check if we should be in idle state
+            if (status.includes('Ready') || status.includes('assist')) {
+                applyState('idle');
+            }
         }
     }
 
@@ -220,22 +223,27 @@ class UIComponents {
     }
 
     /**
-     * Update connection status indicator
+     * Update connection status indicator with state integration
      */
     setConnectionStatus(status) {
-        this.connectionStatusEl.className = `status-indicator ${status}`;
+        // Update the visual indicator
+        if (status === 'connected') {
+            this.connectionStatusEl.className = 'w-3 h-3 rounded-full bg-success';
+            applyState('idle');
+        } else if (status === 'connecting') {
+            this.connectionStatusEl.className = 'w-3 h-3 rounded-full bg-warning';
+            applyState('connecting');
+        } else if (status === 'disconnected') {
+            this.connectionStatusEl.className = 'w-3 h-3 rounded-full bg-error';
+            applyState('error');
+        }
     }
 
     /**
      * Clear conversation
      */
     clearConversation() {
-        this.conversationEl.innerHTML = `
-            <div class="welcome-message">
-                <h2>Conversation Cleared</h2>
-                <p>Start a new conversation</p>
-            </div>
-        `;
+        this.conversationEl.innerHTML = '';
     }
 
     /**
@@ -246,7 +254,7 @@ class UIComponents {
     }
 
     /**
-     * Show browser compatibility warning
+     * Show browser compatibility warning with modal
      */
     showBrowserWarning(issues) {
         const warningEl = document.getElementById('browser-warning');
@@ -254,18 +262,19 @@ class UIComponents {
 
         textEl.innerHTML = `
             <p>Your browser has the following compatibility issues:</p>
-            <ul>
+            <ul class="list-disc list-inside mt-2 mb-2">
                 ${issues.map(issue => `<li>${issue}</li>`).join('')}
             </ul>
             <p>For the best experience, use Firefox or Chrome.</p>
         `;
 
-        warningEl.classList.remove('hidden');
+        // Show modal using DaisyUI method
+        warningEl.showModal();
 
         // Dismiss button
         const dismissBtn = document.getElementById('btn-dismiss-warning');
         dismissBtn.addEventListener('click', () => {
-            warningEl.classList.add('hidden');
+            warningEl.close();
         });
     }
 
