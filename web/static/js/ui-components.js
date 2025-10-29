@@ -16,6 +16,9 @@ class UIComponents {
         this.settingsPanelEl = document.querySelector('.settings-panel');
         this.toggleSettingsBtn = document.getElementById('btn-toggle-settings');
 
+        // Track interim user message bubble
+        this.interimUserBubble = null;
+
         // Setup settings panel toggle
         if (this.toggleSettingsBtn) {
             this.toggleSettingsBtn.addEventListener('click', () => {
@@ -28,8 +31,13 @@ class UIComponents {
      * Add user message to conversation
      */
     addUserMessage(content) {
-        const messageEl = this.createMessageElement('user', content);
-        this.appendMessage(messageEl);
+        // If there's an interim bubble, finalize it instead of creating new one
+        if (this.interimUserBubble) {
+            this.finalizeInterimUserMessage(content);
+        } else {
+            const messageEl = this.createMessageElement('user', content);
+            this.appendMessage(messageEl);
+        }
     }
 
     /**
@@ -38,6 +46,70 @@ class UIComponents {
     addAssistantMessage(content, toolCalls = []) {
         const messageEl = this.createMessageElement('assistant', content, toolCalls);
         this.appendMessage(messageEl);
+    }
+
+    /**
+     * Create or update interim user message bubble (shown while listening)
+     */
+    updateInterimUserMessage(text) {
+        if (!this.interimUserBubble) {
+            // Create new interim bubble
+            const messageEl = document.createElement('div');
+            messageEl.className = 'flex justify-end mb-6';
+
+            messageEl.innerHTML = `
+                <div class="max-w-[80%]">
+                    <div class="text-xs opacity-70 mb-1 px-2">
+                        You
+                        <time class="ml-2">${this.getTimestamp()}</time>
+                    </div>
+                    <div class="rounded-2xl px-4 py-3 chat-bubble-primary opacity-70 animate-pulse">
+                        <span class="interim-text">${this.escapeHtml(text)}</span>
+                    </div>
+                </div>
+            `;
+
+            this.interimUserBubble = messageEl;
+            this.appendMessage(messageEl);
+        } else {
+            // Update existing interim bubble text
+            const textEl = this.interimUserBubble.querySelector('.interim-text');
+            if (textEl) {
+                textEl.textContent = text;
+            }
+        }
+    }
+
+    /**
+     * Finalize interim user message (remove interim styling)
+     */
+    finalizeInterimUserMessage(finalText) {
+        if (!this.interimUserBubble) return;
+
+        // Update text to final version
+        const textEl = this.interimUserBubble.querySelector('.interim-text');
+        if (textEl) {
+            textEl.textContent = finalText;
+        }
+
+        // Remove interim styling (opacity and pulse)
+        const bubbleEl = this.interimUserBubble.querySelector('.chat-bubble-primary');
+        if (bubbleEl) {
+            bubbleEl.classList.remove('opacity-70', 'animate-pulse');
+        }
+
+        // Clear reference
+        this.interimUserBubble = null;
+    }
+
+    /**
+     * Clear interim user message bubble (if user cancels)
+     */
+    clearInterimUserMessage() {
+        if (this.interimUserBubble) {
+            this.interimUserBubble.remove();
+            this.interimUserBubble = null;
+        }
     }
 
     /**
@@ -123,9 +195,14 @@ class UIComponents {
                 </div>
             `;
 
+            // Scroll to bottom after adding download link
+            this.scrollToBottom();
+
         } catch (error) {
             container.innerHTML = '<div style="font-size: 12px; color: #e53e3e;">❌ Failed to generate download link</div>';
             console.error('Download error:', error);
+            // Scroll to bottom even on error
+            this.scrollToBottom();
         }
     }
 
@@ -136,6 +213,8 @@ class UIComponents {
         const summaryEl = indicatorEl.querySelector('.tool-summary');
         if (summaryEl) {
             summaryEl.textContent = newSummary;
+            // Scroll to bottom after updating summary
+            this.scrollToBottom();
         }
     }
 
@@ -187,13 +266,21 @@ class UIComponents {
     }
 
     /**
+     * Scroll conversation to bottom
+     */
+    scrollToBottom() {
+        // Use scrollTop for more reliable scrolling
+        this.conversationEl.scrollTop = this.conversationEl.scrollHeight;
+    }
+
+    /**
      * Append message to conversation
      */
     appendMessage(messageEl) {
         this.conversationEl.appendChild(messageEl);
 
-        // Scroll to bottom
-        messageEl.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        // Scroll to bottom after a short delay to ensure content is rendered
+        setTimeout(() => this.scrollToBottom(), 50);
     }
 
     /**

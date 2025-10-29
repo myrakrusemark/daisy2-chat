@@ -278,6 +278,13 @@ class AudioManager {
      */
     startTTSStream() {
         console.log('Starting TTS audio stream');
+
+        // Stop any currently playing TTS before starting new one
+        if (this.isPlaying || this.currentAudio) {
+            console.log('Stopping currently playing TTS');
+            this.stopSpeaking();
+        }
+
         this.audioChunks = [];
         this.isPlaying = false;
 

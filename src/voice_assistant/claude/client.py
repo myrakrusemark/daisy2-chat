@@ -388,72 +388,78 @@ Reply with ONLY the specific summary sentence starting with a verb ending in -in
         tool_calls = []
 
         # Read output line by line in real-time using async I/O
-        while True:
-            line_bytes = await self.claude_process.stdout.readline()
-            if not line_bytes:
-                # EOF reached
-                break
-
-            line = line_bytes.decode('utf-8').strip()
-            if not line:
-                continue
-
-
-            try:
-                # Parse JSON streaming output
-                event = json.loads(line)
-                event_type = event.get("type")
-
-
-                # Handle system init event
-                if event_type == "system":
-                    continue
-
-                # Handle assistant messages (for tool tracking)
-                elif event_type == "assistant":
-                    message = event.get("message", {})
-                    content = message.get("content", [])
-
-
-                    for item in content:
-                        item_type = item.get("type")
-
-                        if item_type == "tool_use":
-                            # Tool usage notification
-                            tool_name = item.get("name", "unknown")
-                            tool_input = item.get("input", {})
-
-
-                            # Track tool call
-                            tool_calls.append({
-                                "name": tool_name,
-                                "id": item.get("id"),
-                                "input": tool_input
-                            })
-
-                            # Fire off callback immediately if provided (don't wait for summary)
-                            if on_tool_use:
-                                # Send immediate notification with basic info
-                                await on_tool_use(tool_name, tool_input, f"Using {tool_name}")
-
-                                # Then kick off background task to get better summary
-                                # This won't block the main loop
-                                asyncio.create_task(
-                                    self._summarize_and_update(tool_name, tool_input, on_tool_summary_update)
-                                )
-
-                # Check for final result event
-                elif event_type == "result":
-                    final_result = event.get("result", "")
-                    result_received = True
+        try:
+            while True:
+                line_bytes = await self.claude_process.stdout.readline()
+                if not line_bytes:
+                    # EOF reached
                     break
 
-            except json.JSONDecodeError:
-                # Skip malformed lines
-                continue
-            except Exception as e:
-                log.error(f"Error processing stream event: {e}")
-                continue
+                line = line_bytes.decode('utf-8').strip()
+                if not line:
+                    continue
+
+                try:
+                    # Parse JSON streaming output
+                    event = json.loads(line)
+                    event_type = event.get("type")
+
+                    # Handle system init event
+                    if event_type == "system":
+                        continue
+
+                    # Handle assistant messages (for tool tracking)
+                    elif event_type == "assistant":
+                        message = event.get("message", {})
+                        content = message.get("content", [])
+
+                        for item in content:
+                            item_type = item.get("type")
+
+                            if item_type == "tool_use":
+                                # Tool usage notification
+                                tool_name = item.get("name", "unknown")
+                                tool_input = item.get("input", {})
+
+                                # Track tool call
+                                tool_calls.append({
+                                    "name": tool_name,
+                                    "id": item.get("id"),
+                                    "input": tool_input
+                                })
+
+                                # Fire off callback immediately if provided (don't wait for summary)
+                                if on_tool_use:
+                                    # Send immediate notification with basic info
+                                    await on_tool_use(tool_name, tool_input, f"Using {tool_name}")
+
+                                    # Then kick off background task to get better summary
+                                    # This won't block the main loop
+                                    asyncio.create_task(
+                                        self._summarize_and_update(tool_name, tool_input, on_tool_summary_update)
+                                    )
+
+                    # Check for final result event
+                    elif event_type == "result":
+                        final_result = event.get("result", "")
+                        result_received = True
+                        break
+
+                except json.JSONDecodeError:
+                    # Skip malformed lines
+                    continue
+                except Exception as e:
+                    log.error(f"Error processing stream event: {e}")
+                    continue
+
+        except asyncio.CancelledError:
+            log.info("Claude Code execution was cancelled")
+            # Return partial result if available
+            return {
+                "success": False,
+                "response": "Request cancelled by user",
+                "tool_calls": tool_calls,
+            }
 
         if result_received and final_result:
             return {
@@ -467,6 +473,23 @@ Reply with ONLY the specific summary sentence starting with a verb ending in -in
                 "response": "No response received from Claude process",
                 "tool_calls": tool_calls,
             }
+
+    async def interrupt_and_reset(self):
+        """
+        Kill the current Claude Code subprocess and reset for next request.
+        Context is preserved in the session's conversation history.
+        """
+        async with self.claude_process_lock:
+            if self.claude_process:
+                log.info("Killing Claude Code subprocess due to interrupt...")
+                try:
+                    self.claude_process.kill()
+                    await asyncio.wait_for(self.claude_process.wait(), timeout=2)
+                except Exception as e:
+                    log.error(f"Error killing subprocess: {e}")
+
+                self.claude_process = None
+                log.info("Claude Code subprocess killed - will restart on next request")
 
     async def cleanup(self):
         """Clean up persistent Claude process"""

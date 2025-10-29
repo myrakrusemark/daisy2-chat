@@ -173,7 +173,8 @@ class ClaudeAssistant {
         this.speakingToolSummary = false;
 
         this.ws.onTTSStart = (text) => {
-            console.log('TTS stream starting');
+            console.log('TTS stream starting - exiting thinking mode');
+            // Exit thinking mode and enter speaking mode
             applyState('speaking');
             this.audio.startTTSStream();
         };
@@ -197,8 +198,10 @@ class ClaudeAssistant {
                     // Play sleep sound to indicate returning to idle state
                     this.audio.playSound('sleep');
                 } else {
-                    // Reset flag for next TTS
+                    // Reset flag for next TTS and return to processing state
+                    // (Claude is still working on the full response)
                     this.speakingToolSummary = false;
+                    applyState('processing');
                 }
             });
         };
@@ -217,12 +220,14 @@ class ClaudeAssistant {
         };
 
         this.audio.onInterimTranscript = (transcript) => {
-            this.ui.setStatus(`Listening: "${transcript}"`);
+            // Show interim transcript in a user message bubble
+            this.ui.updateInterimUserMessage(transcript);
         };
 
         this.audio.onError = (error) => {
             console.error('Speech recognition error:', error);
             this.ui.setStatus(`Speech error: ${error}`, 'error');
+            this.ui.clearInterimUserMessage();
             this.stopListening();
         };
 
@@ -262,6 +267,12 @@ class ClaudeAssistant {
             if (e.code === 'Space' && !e.repeat) {
                 e.preventDefault();
 
+                // Don't allow push-to-talk during processing mode
+                const currentState = document.body.getAttribute('data-state');
+                if (currentState === 'processing') {
+                    return;
+                }
+
                 // Allow interrupting TTS by stopping speech
                 if (this.isProcessing) {
                     this.audio.stopSpeaking();
@@ -297,6 +308,13 @@ class ClaudeAssistant {
         // Handler for starting push-to-talk (mouse/touch)
         const startPTT = (e) => {
             e.preventDefault();
+
+            // Don't allow push-to-talk during processing mode
+            const currentState = document.body.getAttribute('data-state');
+            if (currentState === 'processing') {
+                return;
+            }
+
             if (this.isProcessing) {
                 this.audio.stopSpeaking();
                 this.isProcessing = false;
@@ -435,7 +453,9 @@ class ClaudeAssistant {
 
         // Send to WebSocket
         if (this.ws && this.ws.isConnected()) {
-            this.ui.setStatus('Sending to Claude...', 'processing');
+            // Enter processing state (vibrant violet) - disables push-to-talk and wake-word
+            applyState('processing');
+            this.isProcessing = true;
             this.ws.sendUserMessage(transcript);
         } else {
             this.ui.setStatus('Not connected to server', 'error');
@@ -443,42 +463,60 @@ class ClaudeAssistant {
     }
 
     /**
-     * Stop all current processes and return to ready/sleep state
+     * Stop all current processes and return to idle state
+     * State-based implementation
      */
     stopAllProcesses() {
-        console.log('Stopping all processes...');
+        const currentState = document.body.getAttribute('data-state');
+        console.log(`Stopping all processes (current state: ${currentState})...`);
 
-        // Send interrupt signal to backend
-        if (this.ws && this.ws.isConnected()) {
-            this.ws.sendInterrupt('user_stopped');
+        // Clear any interim user message
+        this.ui.clearInterimUserMessage();
+
+        // State-based stop logic
+        switch (currentState) {
+            case 'listening':
+                // Stop speech recognition
+                if (this.isListening) {
+                    this.audio.stopListening();
+                    this.isListening = false;
+                    const btn = document.getElementById('btn-push-to-talk');
+                    if (btn) btn.classList.remove('btn-active');
+                }
+                break;
+
+            case 'processing':
+                // Interrupt backend and stop any pending TTS
+                if (this.ws && this.ws.isConnected()) {
+                    this.ws.sendInterrupt('user_stopped');
+                }
+                this.audio.stopSpeaking();
+                this.isProcessing = false;
+                break;
+
+            case 'speaking':
+                // Stop TTS playback
+                this.audio.stopSpeaking();
+                this.isProcessing = false;
+                break;
         }
 
-        // Stop listening if active
-        if (this.isListening) {
-            this.stopListening();
-        }
-
-        // Stop TTS playback
-        if (this.isProcessing) {
-            this.audio.stopSpeaking();
-            this.isProcessing = false;
-        }
-
-        // If in wake word mode, return to listening for wake word
-        // Otherwise, clear activation mode
+        // Return to idle state or wake word mode
         if (this.activationMode === 'wake-word' && this.wakeWord) {
-            // Just restart wake word listening, don't turn off the mode
+            // Restart wake word listening
             this.wakeWord.stopListening();
             setTimeout(() => {
                 this.wakeWord.startListening();
                 this.ui.setStatus('Listening for wake word: "computer"');
             }, 500);
+            applyState('idle');
         } else {
-            // Not in wake word mode, so clear activation mode
+            // Clear activation mode and return to idle
             document.querySelectorAll('.mode-btn').forEach(btn => {
                 btn.classList.remove('active', 'listening');
             });
             this.activationMode = null;
+            applyState('idle');
             this.ui.setStatus('Ready to assist');
         }
 

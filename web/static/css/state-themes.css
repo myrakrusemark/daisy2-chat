@@ -22,7 +22,7 @@
     /* State color definitions */
     --state-idle: oklch(0.25 0.03 240);           /* Dark blue-gray */
     --state-listening: oklch(0.35 0.15 150);      /* Green */
-    --state-processing: oklch(0.30 0.12 280);     /* Purple */
+    --state-processing: oklch(0.35 0.20 300);     /* Vibrant violet */
     --state-speaking: oklch(0.30 0.12 220);       /* Blue */
     --state-connecting: oklch(0.35 0.10 60);      /* Yellow-orange */
     --state-error: oklch(0.35 0.15 20);           /* Red */

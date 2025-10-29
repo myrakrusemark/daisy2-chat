@@ -49,16 +49,7 @@ export const STATE_THEMES = {
         status: '❌ Error occurred',
         cssVariable: '--state-error',
         animation: null
-    },
-
-    // Easy to add new states - just add CSS variable in input.css:
-    // thinking: {
-    //     name: 'Thinking',
-    //     emoji: '💭',
-    //     status: '💭 Thinking...',
-    //     cssVariable: '--state-thinking',  // Define in input.css
-    //     animation: null
-    // }
+    }
 };
 
 // Get ordered list of state keys
@@ -102,7 +93,7 @@ export function applyState(stateName) {
     // Show/hide stop button based on state (using visibility to prevent layout shift)
     const stopBtn = document.getElementById('btn-stop');
     if (stopBtn) {
-        const stoppableStates = ['listening', 'processing', 'speaking', 'thinking'];
+        const stoppableStates = ['listening', 'processing', 'speaking'];
         if (stoppableStates.includes(stateName)) {
             stopBtn.style.visibility = 'visible';
         } else {
