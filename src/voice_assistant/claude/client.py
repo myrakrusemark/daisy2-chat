@@ -58,6 +58,7 @@ class ClaudeCodeClient:
         self.permission_mode = permission_mode
         self.claude_process = None  # Persistent subprocess for streaming
         self.claude_process_lock = asyncio.Lock()
+        self.claude_needs_history = False  # Flag to track if subprocess needs history re-sent
 
         # Initialize Anthropic async client for tool summaries (if key provided)
         self.anthropic_client = None
@@ -341,7 +342,8 @@ Reply with ONLY the specific summary sentence starting with a verb ending in -in
         prompt: str,
         on_tool_use: Optional[Callable[[str, dict, str], None]] = None,
         on_tool_summary_update: Optional[Callable[[str, dict, str], None]] = None,
-        conversation_history: Optional[List[Dict[str, Any]]] = None
+        conversation_history: Optional[List[Dict[str, Any]]] = None,
+        is_interrupted: Optional[Callable[[], bool]] = None
     ) -> Dict[str, Any]:
         """
         Execute a Claude Code request with streaming output
@@ -351,12 +353,42 @@ Reply with ONLY the specific summary sentence starting with a verb ending in -in
             on_tool_use: Callback when a tool is used (tool_name, tool_input, summary)
             on_tool_summary_update: Callback when better summary is ready (delayed)
             conversation_history: Optional conversation history for context
+            is_interrupted: Callable that returns True if execution should stop
 
         Returns:
             Dict containing response text and metadata
         """
         # Ensure process is running
         await self._start_persistent_claude()
+
+        # If subprocess was restarted, re-send conversation history
+        if self.claude_needs_history and conversation_history:
+            log.info(f"Re-sending conversation history ({len(conversation_history)} messages)")
+            try:
+                for msg in conversation_history:
+                    role = msg.get("role", "user")
+                    content = msg.get("content", "")
+
+                    # Format each historical message
+                    history_message = {
+                        "type": "user" if role == "user" else "assistant",
+                        "message": {
+                            "role": role,
+                            "content": [{"type": "text", "text": content}]
+                        }
+                    }
+
+                    # Send historical message
+                    history_bytes = (json.dumps(history_message) + "\n").encode('utf-8')
+                    self.claude_process.stdin.write(history_bytes)
+                    await self.claude_process.stdin.drain()
+
+                log.info("Conversation history re-sent successfully")
+            except Exception as e:
+                log.error(f"Error re-sending conversation history: {e}")
+
+            # Reset flag after sending history
+            self.claude_needs_history = False
 
         # Format message as stream-json
         json_message = {
@@ -377,7 +409,29 @@ Reply with ONLY the specific summary sentence starting with a verb ending in -in
             log.error(f"Failed to write to Claude process: {e}")
             # Process died, restart and retry
             self.claude_process = None
+            self.claude_needs_history = True  # New subprocess will need history
             await self._start_persistent_claude()
+
+            # Re-send conversation history before retrying
+            if conversation_history:
+                log.info(f"Re-sending conversation history after crash ({len(conversation_history)} messages)")
+                for msg in conversation_history:
+                    role = msg.get("role", "user")
+                    content = msg.get("content", "")
+                    history_message = {
+                        "type": "user" if role == "user" else "assistant",
+                        "message": {
+                            "role": role,
+                            "content": [{"type": "text", "text": content}]
+                        }
+                    }
+                    history_bytes = (json.dumps(history_message) + "\n").encode('utf-8')
+                    self.claude_process.stdin.write(history_bytes)
+                    await self.claude_process.stdin.drain()
+                log.info("Conversation history re-sent after crash")
+                self.claude_needs_history = False
+
+            # Now retry sending the current message
             message_bytes = (json.dumps(json_message) + "\n").encode('utf-8')
             self.claude_process.stdin.write(message_bytes)
             await self.claude_process.stdin.drain()
@@ -390,6 +444,18 @@ Reply with ONLY the specific summary sentence starting with a verb ending in -in
         # Read output line by line in real-time using async I/O
         try:
             while True:
+                # Check for interruption/cancellation on every iteration
+                if is_interrupted and is_interrupted():
+                    log.info("Interrupted flag detected - stopping message processing")
+                    return {
+                        "success": False,
+                        "response": "Request interrupted by user",
+                        "tool_calls": tool_calls,
+                    }
+
+                # This allows the task to be interrupted immediately via CancelledError
+                await asyncio.sleep(0)
+
                 line_bytes = await self.claude_process.stdout.readline()
                 if not line_bytes:
                     # EOF reached
@@ -399,9 +465,28 @@ Reply with ONLY the specific summary sentence starting with a verb ending in -in
                 if not line:
                     continue
 
+                # Check again after reading - we might have been interrupted while blocked on readline
+                if is_interrupted and is_interrupted():
+                    log.info("Interrupted flag detected after reading - stopping message processing")
+                    return {
+                        "success": False,
+                        "response": "Request interrupted by user",
+                        "tool_calls": tool_calls,
+                    }
+
                 try:
                     # Parse JSON streaming output
                     event = json.loads(line)
+
+                    # Check AGAIN immediately after parsing, before processing any events
+                    if is_interrupted and is_interrupted():
+                        log.info("Interrupted flag detected after parsing - stopping message processing")
+                        return {
+                            "success": False,
+                            "response": "Request interrupted by user",
+                            "tool_calls": tool_calls,
+                        }
+
                     event_type = event.get("type")
 
                     # Handle system init event
@@ -430,6 +515,15 @@ Reply with ONLY the specific summary sentence starting with a verb ending in -in
 
                                 # Fire off callback immediately if provided (don't wait for summary)
                                 if on_tool_use:
+                                    # Check if interrupted before sending tool notification
+                                    if is_interrupted and is_interrupted():
+                                        log.info("Interrupted before tool notification")
+                                        return {
+                                            "success": False,
+                                            "response": "Request interrupted by user",
+                                            "tool_calls": tool_calls,
+                                        }
+
                                     # Send immediate notification with basic info
                                     await on_tool_use(tool_name, tool_input, f"Using {tool_name}")
 
@@ -441,6 +535,15 @@ Reply with ONLY the specific summary sentence starting with a verb ending in -in
 
                     # Check for final result event
                     elif event_type == "result":
+                        # Check if interrupted before processing final result
+                        if is_interrupted and is_interrupted():
+                            log.info("Interrupted before processing final result")
+                            return {
+                                "success": False,
+                                "response": "Request interrupted by user",
+                                "tool_calls": tool_calls,
+                            }
+
                         final_result = event.get("result", "")
                         result_received = True
                         break
@@ -474,21 +577,26 @@ Reply with ONLY the specific summary sentence starting with a verb ending in -in
                 "tool_calls": tool_calls,
             }
 
-    async def interrupt_and_reset(self):
+    async def interrupt_and_restart(self):
         """
-        Kill the current Claude Code subprocess and reset for next request.
-        Context is preserved in the session's conversation history.
+        Interrupt the current Claude Code request by killing the subprocess.
+        It will automatically restart on the next request.
+        Conversation context is preserved in the session.
         """
         async with self.claude_process_lock:
             if self.claude_process:
-                log.info("Killing Claude Code subprocess due to interrupt...")
+                log.info("Interrupting Claude Code - killing subprocess...")
                 try:
+                    # Kill it immediately (don't wait for graceful termination)
                     self.claude_process.kill()
-                    await asyncio.wait_for(self.claude_process.wait(), timeout=2)
+                    await asyncio.wait_for(self.claude_process.wait(), timeout=1)
+                except asyncio.TimeoutError:
+                    log.warning("Subprocess didn't die after kill, forcing...")
                 except Exception as e:
                     log.error(f"Error killing subprocess: {e}")
 
                 self.claude_process = None
+                self.claude_needs_history = True  # New subprocess will need history
                 log.info("Claude Code subprocess killed - will restart on next request")
 
     async def cleanup(self):

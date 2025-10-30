@@ -149,6 +149,14 @@ class WebSocketClient {
                 }
                 break;
 
+            case 'process_stopped':
+                console.log('🛑 SERVER CONFIRMED: Process stopped', message.summary);
+                // Show as a tool indicator in the UI
+                if (window.app && window.app.ui) {
+                    window.app.ui.addToolUseIndicator('stop', message.summary, {});
+                }
+                break;
+
             default:
                 console.warn('Unknown message type:', type);
         }
@@ -179,6 +187,8 @@ class WebSocketClient {
         if (!this.connected) {
             return false;
         }
+
+        console.log('🛑 BROWSER SENDING: Interrupt signal to server', reason);
 
         const message = {
             type: 'interrupt',

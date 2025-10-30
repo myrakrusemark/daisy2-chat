@@ -7,7 +7,7 @@ services:
       dockerfile: Dockerfile
     container_name: claude-assistant
     ports:
-      - "8000:8000"
+      - "8001:8000"
     environment:
       # Required
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
@@ -43,7 +43,6 @@ services:
       - /run/media/myra/DropboxSD/Dropbox/Obsidian Vault/📌 Pinned/Gold.md:/app/workspace/Gold.md:z
       - /run/media/myra/DropboxSD/Dropbox/Obsidian Vault/📌 Pinned/🛒 Shopping List.md:/app/workspace/Shopping-List.md:z
       - /run/media/myra/DropboxSD/Dropbox/Obsidian Vault:/app/workspace/ObsidianVault:z
-      - /home/myra/Scripts/drive-schedule:/app/workspace/drive-schedule:z
       - /run/media/myra/DropboxSD/Dropbox/applications:/app/workspace/applications:z
 
     restart: unless-stopped

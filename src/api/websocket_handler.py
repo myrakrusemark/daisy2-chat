@@ -4,7 +4,6 @@ import json
 import logging
 import asyncio
 import base64
-import uuid
 from typing import Callable, Optional
 from fastapi import WebSocket
 
@@ -39,7 +38,6 @@ class WebSocketHandler:
         self.processing = False
         self.interrupted = False
         self.current_task = None  # Track the current processing task
-        self.current_request_id = None  # Track the current request ID to ignore old messages
 
         # Initialize TTS service
         self.tts = TTSService()
@@ -77,48 +75,31 @@ class WebSocketHandler:
             message=error_message
         ).model_dump())
 
-    async def send_assistant_message(self, content: str, tool_calls: Optional[list] = None, request_id: str = None):
+    async def send_assistant_message(self, content: str, tool_calls: Optional[list] = None):
         """Send assistant response"""
-        # Only send if request is still active
-        if request_id and self.current_request_id != request_id:
-            log.info(f"🚫 BLOCKED assistant_message from cancelled request {request_id} (current: {self.current_request_id})")
-            return
-
-        log.info(f"✅ Sending assistant_message for request {request_id}")
+        log.info(f"Sending assistant message (interrupted={self.interrupted}): {content[:50]}...")
         await self.send_message(AssistantMessage(
             content=content,
             tool_calls=tool_calls or []
         ).model_dump())
 
-    async def send_tool_use(self, tool_name: str, tool_input: dict, summary: str, request_id: str = None):
+    async def send_tool_use(self, tool_name: str, tool_input: dict, summary: str):
         """Send tool usage notification"""
-        # Only send if request is still active
-        if request_id and self.current_request_id != request_id:
-            log.info(f"🚫 BLOCKED tool_use from cancelled request {request_id} (current: {self.current_request_id})")
-            return
-
-        log.info(f"✅ Sending tool_use for request {request_id}")
+        log.info(f"Sending tool use notification: {tool_name} (interrupted={self.interrupted})")
         await self.send_message(ToolUseMessage(
             tool=tool_name,
             input=tool_input,
             summary=summary
         ).model_dump())
 
-    async def stream_tts_audio(self, text: str, request_id: str = None):
+    async def stream_tts_audio(self, text: str):
         """
         Stream TTS audio to client
 
         Args:
             text: Text to synthesize and stream
-            request_id: Optional request ID to validate this message belongs to active request
         """
         try:
-            # Check if request is still active
-            if request_id and self.current_request_id != request_id:
-                log.info(f"🚫 BLOCKED TTS from cancelled request {request_id} (current: {self.current_request_id})")
-                return
-
-            log.info(f"✅ Starting TTS for request {request_id}")
             # Send TTS start message
             await self.send_message({
                 "type": "tts_start",
@@ -127,9 +108,7 @@ class WebSocketHandler:
 
             # Stream audio chunks
             async for audio_chunk in self.tts.synthesize_streaming(text):
-                # Check again during streaming
-                if request_id and self.current_request_id != request_id:
-                    log.info(f"🚫 CANCELLED TTS stream from request {request_id} (current: {self.current_request_id})")
+                if self.interrupted:
                     break
 
                 # Encode audio chunk as base64 for JSON transmission
@@ -141,11 +120,10 @@ class WebSocketHandler:
                     "data": audio_b64
                 })
 
-            # Send TTS end message (only if request still active)
-            if not request_id or self.current_request_id == request_id:
-                await self.send_message({
-                    "type": "tts_end"
-                })
+            # Send TTS end message
+            await self.send_message({
+                "type": "tts_end"
+            })
 
         except Exception as e:
             log.error(f"Error streaming TTS audio: {e}")
@@ -158,11 +136,6 @@ class WebSocketHandler:
         Args:
             content: Transcribed text from user
         """
-        # Generate unique request ID for this request
-        request_id = str(uuid.uuid4())
-        self.current_request_id = request_id
-        log.info(f"Processing request {request_id}")
-
         try:
             # Mark as processing
             self.processing = True
@@ -177,18 +150,22 @@ class WebSocketHandler:
             # Define callback for tool usage events
             async def on_tool_use(tool_name: str, tool_input: dict, summary: str):
                 """Callback when a tool is used during streaming"""
-                # Send tool use notification to browser (with request ID validation)
-                await self.send_tool_use(tool_name, tool_input, summary, request_id=request_id)
+                log.info(f"on_tool_use callback called: {tool_name} (interrupted={self.interrupted})")
+                if self.interrupted:
+                    log.info(f"Skipping tool use (interrupted): {tool_name}")
+                    return
+
+                # Send tool use notification to browser
+                await self.send_tool_use(tool_name, tool_input, summary)
 
             # Define callback for tool summary updates
             async def on_tool_summary_update(tool_name: str, tool_input: dict, better_summary: str):
                 """Callback when a better AI-generated summary is ready"""
-                # Ignore if this request has been interrupted
-                if self.current_request_id != request_id:
-                    log.info(f"🚫 BLOCKED tool_summary_update from cancelled request {request_id} (current: {self.current_request_id})")
+                log.info(f"on_tool_summary_update callback called: {tool_name} (interrupted={self.interrupted})")
+                if self.interrupted:
+                    log.info(f"Skipping tool summary update (interrupted): {tool_name}")
                     return
 
-                log.info(f"✅ Sending tool_summary_update for request {request_id}")
                 # Send tool summary update to browser
                 await self.send_message({
                     "type": "tool_summary_update",
@@ -197,8 +174,8 @@ class WebSocketHandler:
                     "summary": better_summary
                 })
 
-                # Stream TTS audio for the tool summary (with request ID validation)
-                await self.stream_tts_audio(better_summary, request_id=request_id)
+                # Stream TTS audio for the tool summary
+                await self.stream_tts_audio(better_summary)
 
             # Execute Claude Code request with streaming
             result = await self.session.claude_client.execute_streaming(
@@ -206,11 +183,13 @@ class WebSocketHandler:
                 on_tool_use=on_tool_use,
                 on_tool_summary_update=on_tool_summary_update,
                 conversation_history=self.session.conversation.history,
+                is_interrupted=lambda: self.interrupted,
             )
 
-            # Check if this request is still active (not interrupted by a new request)
-            if self.current_request_id != request_id:
-                log.info(f"🚫 Request {request_id} was interrupted, ignoring result (current: {self.current_request_id})")
+            # Check if interrupted
+            if self.interrupted:
+                log.info("Interrupted after execute_streaming - not sending result")
+                # Don't send error - interrupt handler already sent "process_stopped" indicator
                 return
 
             if not result["success"]:
@@ -220,28 +199,39 @@ class WebSocketHandler:
             response_text = result["response"]
             tool_calls = result.get("tool_calls", [])
 
-            # Final check before sending response
-            if self.current_request_id != request_id:
-                log.info(f"🚫 Request {request_id} was interrupted before sending response (current: {self.current_request_id})")
+            # Add to conversation history IMMEDIATELY (even if interrupted)
+            # This ensures anything shown in browser is also in context
+            self.session.conversation.add_assistant_message(response_text, tool_calls=tool_calls)
+            log.info(f"Added message to conversation history (tool_calls={len(tool_calls)})")
+
+            # Check interrupted after adding to history
+            if self.interrupted:
+                log.info("Interrupted after adding to history - not sending to browser")
                 return
 
-            # Add to conversation history
-            self.session.conversation.add_assistant_message(response_text, tool_calls=tool_calls)
+            # Check interrupted before sending message
+            if self.interrupted:
+                log.info("Interrupted before sending assistant message")
+                return
 
             # Send final response to browser (WITHOUT tool_calls - those were already streamed)
-            await self.send_assistant_message(response_text, tool_calls=None, request_id=request_id)
+            await self.send_assistant_message(response_text, tool_calls=None)
 
-            # Stream TTS audio to browser (with request ID validation)
+            # Check interrupted before TTS
+            if self.interrupted:
+                log.info("Interrupted before TTS")
+                return
+
+            # Stream TTS audio to browser
             if response_text and response_text.strip():
-                await self.stream_tts_audio(response_text, request_id=request_id)
+                await self.stream_tts_audio(response_text)
 
-            # Mark processing complete (only if still active)
-            if self.current_request_id == request_id:
-                await self.send_processing("complete")
+            # Mark processing complete
+            await self.send_processing("complete")
 
         except asyncio.CancelledError:
             log.info("User message processing was cancelled")
-            await self.send_error("Request cancelled by user")
+            # Don't send error - interrupt handler already sent confirmation
             raise  # Re-raise to properly clean up the task
         except Exception as e:
             log.error(f"Error handling user message: {e}")
@@ -262,14 +252,10 @@ class WebSocketHandler:
             await self.send_error("Empty message received")
             return
 
-        # Create and track the processing task
+        # Create and track the processing task but DON'T await it
+        # This allows the WebSocket listener to continue receiving messages (like interrupts)
         self.current_task = asyncio.create_task(self._process_user_message(content))
-
-        try:
-            await self.current_task
-        except asyncio.CancelledError:
-            log.info("User message task was cancelled")
-            # Task was cancelled, no need to re-raise
+        log.info("User message task created (not blocking websocket listener)")
 
     async def handle_interrupt(self, reason: str):
         """
@@ -278,16 +264,17 @@ class WebSocketHandler:
         Args:
             reason: Reason for interruption
         """
-        log.info(f"⛔ INTERRUPT received: {reason}")
+        log.info(f"Interrupt received: {reason}")
         self.interrupted = True
 
-        # Invalidate the current request ID so any pending messages are ignored
-        old_request_id = self.current_request_id
-        self.current_request_id = None
-        log.info(f"⛔ INVALIDATED request {old_request_id} - current is now None")
+        # Send immediate acknowledgment to browser as a tool-style indicator
+        await self.send_message({
+            "type": "process_stopped",
+            "summary": "Process stopped by user"
+        })
 
-        # Kill the Claude Code subprocess to stop it from responding
-        await self.session.claude_client.interrupt_and_reset()
+        # Kill the Claude Code subprocess to truly stop processing
+        await self.session.claude_client.interrupt_and_restart()
 
         # Cancel the current processing task if it exists
         if self.current_task and not self.current_task.done():
@@ -296,7 +283,7 @@ class WebSocketHandler:
             self.current_task = None
 
         # If Claude is speaking (TTS in browser), browser handles stopping audio
-        # Subprocess is killed and will restart on next request (context preserved)
+        # Task and subprocess are both stopped
 
     async def handle_config_update(self, config_data: dict):
         """
