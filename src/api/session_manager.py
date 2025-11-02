@@ -55,7 +55,6 @@ class SessionManager:
     async def create_session(
         self,
         working_directory: Optional[Path] = None,
-        tool_profile: Optional[str] = "coding",
         allowed_tools: Optional[List[str]] = None,
         permission_mode: Optional[str] = None,
     ) -> Session:
@@ -64,7 +63,6 @@ class SessionManager:
 
         Args:
             working_directory: Working directory for Claude operations
-            tool_profile: Tool allowlist profile name
             allowed_tools: Override allowed tools list
             permission_mode: Permission mode
 

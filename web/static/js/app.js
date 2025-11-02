@@ -40,8 +40,6 @@ class ClaudeAssistant {
         try {
             // Create session via API
             const workingDir = document.getElementById('working-directory').value;
-            const toolProfile = document.getElementById('tool-profile').value;
-            const permissionMode = document.getElementById('permission-mode').value;
 
             const response = await fetch('/api/sessions', {
                 method: 'POST',
@@ -49,9 +47,7 @@ class ClaudeAssistant {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    working_directory: workingDir,
-                    tool_profile: toolProfile,
-                    permission_mode: permissionMode
+                    working_directory: workingDir
                 })
             });
 

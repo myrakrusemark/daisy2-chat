@@ -118,7 +118,6 @@ async def create_session(session_create: SessionCreate):
 
         session = await session_manager.create_session(
             working_directory=working_dir,
-            tool_profile=session_create.tool_profile,
             allowed_tools=session_create.allowed_tools,
             permission_mode=session_create.permission_mode,
         )
@@ -127,7 +126,6 @@ async def create_session(session_create: SessionCreate):
             session_id=session.session_id,
             working_directory=str(session.config.working_directory),
             conversation_id=session.conversation.conversation_id,
-            tool_profile=session_create.tool_profile or "coding",
             allowed_tools=session.config.allowed_tools,
             permission_mode=session.config.permission_mode,
             created_at=session.created_at,
@@ -158,7 +156,6 @@ async def get_session(session_id: str):
         session_id=session.session_id,
         working_directory=str(session.config.working_directory),
         conversation_id=session.conversation.conversation_id,
-        tool_profile=session.config.permission_mode,
         allowed_tools=session.config.allowed_tools,
         permission_mode=session.config.permission_mode,
         created_at=session.created_at,

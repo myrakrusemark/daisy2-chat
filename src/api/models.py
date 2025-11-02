@@ -8,7 +8,6 @@ from datetime import datetime
 class SessionCreate(BaseModel):
     """Request to create a new session"""
     working_directory: Optional[str] = None
-    tool_profile: Optional[str] = "coding"
     allowed_tools: Optional[List[str]] = None
     permission_mode: Optional[str] = "bypassPermissions"
 
@@ -18,7 +17,6 @@ class SessionInfo(BaseModel):
     session_id: str
     working_directory: str
     conversation_id: str
-    tool_profile: str
     allowed_tools: List[str]
     permission_mode: str
     created_at: datetime
@@ -77,7 +75,6 @@ class SessionInfoMessage(BaseModel):
     session_id: str
     working_dir: str
     conversation_id: str
-    tool_profile: str
 
 
 class ConversationHistory(BaseModel):
