@@ -1,3 +1,7 @@
+/**
+ * WebSocket client for real-time communication with backend
+ */
+
 class WebSocketClient {
     constructor(sessionId) {
         this.sessionId = sessionId;
@@ -21,13 +25,19 @@ class WebSocketClient {
         this.onTTSEnd = null;
     }
 
+    /**
+     * Connect to WebSocket server
+     */
     connect() {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const wsUrl = `${protocol}//${window.location.host}/ws/${this.sessionId}`;
 
+        console.log('Connecting to WebSocket:', wsUrl);
+
         this.ws = new WebSocket(wsUrl);
 
         this.ws.onopen = () => {
+            console.log('WebSocket connected');
             this.connected = true;
             this.reconnectAttempts = 0;
 
@@ -37,6 +47,7 @@ class WebSocketClient {
         };
 
         this.ws.onclose = () => {
+            console.log('WebSocket disconnected');
             this.connected = false;
 
             if (this.onDisconnect) {
@@ -138,14 +149,6 @@ class WebSocketClient {
                 }
                 break;
 
-            case 'process_stopped':
-                console.log('🛑 SERVER CONFIRMED: Process stopped', message.summary);
-                // Show as a tool indicator in the UI
-                if (window.app && window.app.ui) {
-                    window.app.ui.addToolUseIndicator('stop', message.summary, {});
-                }
-                break;
-
             default:
                 console.warn('Unknown message type:', type);
         }
@@ -176,8 +179,6 @@ class WebSocketClient {
         if (!this.connected) {
             return false;
         }
-
-        console.log('🛑 BROWSER SENDING: Interrupt signal to server', reason);
 
         const message = {
             type: 'interrupt',

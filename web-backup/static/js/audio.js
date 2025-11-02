@@ -1,3 +1,8 @@
+/**
+ * Audio module - Web Speech API (STT) and Speech Synthesis API (TTS)
+ * Firefox-compatible implementation
+ */
+
 class AudioManager {
     constructor() {
         // Speech Recognition (STT)
@@ -24,7 +29,6 @@ class AudioManager {
         this.audioChunks = [];
         this.isPlaying = false;
         this.currentAudio = null;  // Track current audio element for stopping
-        this.lastAudioBlob = null;  // Save last audio blob for replay
 
         // Sound effects
         this.soundsEnabled = true;
@@ -47,6 +51,9 @@ class AudioManager {
         this.setupAudioInitialization();
     }
 
+    /**
+     * Setup audio initialization on first user interaction
+     */
     setupAudioInitialization() {
         const initAudio = () => {
             if (this.audioInitialized) return;
@@ -64,6 +71,7 @@ class AudioManager {
             });
 
             this.audioInitialized = true;
+            console.log('Audio initialized');
 
             // Remove listeners after initialization
             document.removeEventListener('click', initAudio);
@@ -77,6 +85,27 @@ class AudioManager {
         document.addEventListener('touchstart', initAudio, { once: false });
     }
 
+    /**
+     * No longer needed - Transformers.js doesn't have voice selection
+     * Keeping stubs for compatibility
+     */
+    getVoices() {
+        return [];
+    }
+
+    setVoice(voiceName) {
+        // No-op for Transformers.js
+        console.log('Voice selection not available with Transformers.js TTS');
+    }
+
+    setSpeechRate(rate) {
+        // No-op for Transformers.js
+        console.log('Speech rate control not available with Transformers.js TTS');
+    }
+
+    /**
+     * Setup speech recognition event handlers
+     */
     setupRecognitionHandlers() {
         if (!this.recognition) return;
 
@@ -99,23 +128,12 @@ class AudioManager {
                 this.accumulatedTranscript = completeTranscript.trim();
             }
 
-            // Store the last interim transcript for push-to-talk mode
-            if (interimTranscript) {
-                this.lastInterimTranscript = interimTranscript;
-            }
-
-            // For wake-word mode: start/reset silence timer only on meaningful speech
-            if (this.currentMode === 'wake-word') {
-                // Only reset timer if we have actual content (not empty/whitespace)
-                const hasContent = (completeTranscript && completeTranscript.trim()) ||
-                                   (interimTranscript && interimTranscript.trim());
-
-                if (hasContent) {
-                    this.clearSilenceTimer();
-                    this.silenceTimer = setTimeout(() => {
-                        this.stopListening();
-                    }, this.silenceTimeout);
-                }
+            // For wake-word mode: start/reset silence timer on ANY speech (final or interim)
+            if (this.currentMode === 'wake-word' && (completeTranscript || interimTranscript)) {
+                this.clearSilenceTimer();
+                this.silenceTimer = setTimeout(() => {
+                    this.stopListening();
+                }, this.silenceTimeout);
             }
 
             // Show interim results for user feedback
@@ -135,25 +153,16 @@ class AudioManager {
         };
 
         this.recognition.onend = () => {
+            console.log('Speech recognition ended');
             this.isRecognitionActive = false;
 
-            // Determine what to send
-            let transcriptToSend = this.accumulatedTranscript.trim();
-
-            // In push-to-talk mode, if we have no final transcript but have interim, use that
-            if (!transcriptToSend && this.lastInterimTranscript && this.currentMode === 'push-to-talk') {
-                transcriptToSend = this.lastInterimTranscript.trim();
-                console.log('Using interim transcript for push-to-talk:', transcriptToSend);
+            // Send accumulated transcript if we have one
+            if (this.accumulatedTranscript.trim() && this.onTranscript) {
+                this.onTranscript(this.accumulatedTranscript.trim());
             }
 
-            // Send transcript if we have one
-            if (transcriptToSend && this.onTranscript) {
-                this.onTranscript(transcriptToSend);
-            }
-
-            // Clear the buffers
+            // Clear the buffer
             this.accumulatedTranscript = '';
-            this.lastInterimTranscript = '';
 
             if (this.onEnd) {
                 this.onEnd();
@@ -161,10 +170,10 @@ class AudioManager {
         };
 
         this.recognition.onstart = () => {
+            console.log('Speech recognition started');
             this.isRecognitionActive = true;
-            // Clear buffers when starting new recording
+            // Clear buffer when starting new recording
             this.accumulatedTranscript = '';
-            this.lastInterimTranscript = '';
         };
     }
 
@@ -186,6 +195,7 @@ class AudioManager {
 
         // If already active, stop first
         if (this.isRecognitionActive) {
+            console.log('Recognition already active, stopping first...');
             this.recognition.stop();
             // Wait a bit before restarting
             setTimeout(() => {
@@ -197,6 +207,9 @@ class AudioManager {
         return this._attemptStart();
     }
 
+    /**
+     * Internal method to attempt starting recognition
+     */
     _attemptStart() {
         try {
             this.recognition.start();
@@ -216,6 +229,9 @@ class AudioManager {
         }
     }
 
+    /**
+     * Stop listening
+     */
     stopListening() {
         // Clear silence timer
         this.clearSilenceTimer();
@@ -225,6 +241,9 @@ class AudioManager {
         }
     }
 
+    /**
+     * Clear the silence detection timer
+     */
     clearSilenceTimer() {
         if (this.silenceTimer) {
             clearTimeout(this.silenceTimer);
@@ -232,12 +251,11 @@ class AudioManager {
         }
     }
 
+    /**
+     * Start TTS audio stream
+     */
     startTTSStream() {
-        // Stop any currently playing TTS before starting new one
-        if (this.isPlaying || this.currentAudio) {
-            this.stopSpeaking();
-        }
-
+        console.log('Starting TTS audio stream');
         this.audioChunks = [];
         this.isPlaying = false;
 
@@ -247,6 +265,9 @@ class AudioManager {
         }
     }
 
+    /**
+     * Add audio chunk to stream
+     */
     addTTSChunk(audioData) {
         // audioData is base64 encoded audio chunk
         this.audioChunks.push(audioData);
@@ -277,7 +298,6 @@ class AudioManager {
 
             // Create audio element and play
             const blob = new Blob([bytes], { type: 'audio/wav' });
-            this.lastAudioBlob = blob;  // Save for replay
             const audioUrl = URL.createObjectURL(blob);
             const audio = new Audio(audioUrl);
             this.currentAudio = audio;  // Track for stopping
@@ -305,47 +325,6 @@ class AudioManager {
             console.error('Error playing TTS stream:', error);
             this.isPlaying = false;
             if (onEnd) onEnd();
-        }
-    }
-
-    /**
-     * Replay the last TTS audio
-     */
-    async replayLastTTS() {
-        if (!this.lastAudioBlob) {
-            console.warn('No TTS audio to replay');
-            return;
-        }
-
-        try {
-            // Stop any currently playing audio
-            if (this.isPlaying || this.currentAudio) {
-                this.stopSpeaking();
-            }
-
-            const audioUrl = URL.createObjectURL(this.lastAudioBlob);
-            const audio = new Audio(audioUrl);
-            this.currentAudio = audio;
-
-            audio.onended = () => {
-                console.log('TTS replay finished');
-                URL.revokeObjectURL(audioUrl);
-                this.isPlaying = false;
-                this.currentAudio = null;
-            };
-
-            audio.onerror = (e) => {
-                console.error('Audio replay error:', e);
-                URL.revokeObjectURL(audioUrl);
-                this.isPlaying = false;
-                this.currentAudio = null;
-            };
-
-            this.isPlaying = true;
-            await audio.play();
-        } catch (error) {
-            console.error('Error replaying TTS:', error);
-            this.isPlaying = false;
         }
     }
 

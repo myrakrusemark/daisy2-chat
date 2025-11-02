@@ -19,9 +19,6 @@ class UIComponents {
         // Track interim user message bubble
         this.interimUserBubble = null;
 
-        // Track latest assistant message for TTS replay
-        this.latestAssistantMessage = null;
-
         // Setup settings panel toggle
         if (this.toggleSettingsBtn) {
             this.toggleSettingsBtn.addEventListener('click', () => {
@@ -30,6 +27,9 @@ class UIComponents {
         }
     }
 
+    /**
+     * Add user message to conversation
+     */
     addUserMessage(content) {
         // If there's an interim bubble, finalize it instead of creating new one
         if (this.interimUserBubble) {
@@ -40,37 +40,17 @@ class UIComponents {
         }
     }
 
+    /**
+     * Add assistant message to conversation
+     */
     addAssistantMessage(content, toolCalls = []) {
         const messageEl = this.createMessageElement('assistant', content, toolCalls);
-
-        // Remove click handler from previous assistant message
-        if (this.latestAssistantMessage) {
-            const oldBubble = this.latestAssistantMessage.querySelector('.chat-bubble-secondary');
-            if (oldBubble) {
-                oldBubble.classList.remove('tts-replay-enabled');
-                oldBubble.style.cursor = '';
-                oldBubble.replaceWith(oldBubble.cloneNode(true)); // Remove all event listeners
-            }
-        }
-
-        // Add click handler to new assistant message bubble for TTS replay
-        const bubble = messageEl.querySelector('.chat-bubble-secondary');
-        if (bubble) {
-            bubble.classList.add('tts-replay-enabled');
-            bubble.style.cursor = 'pointer';
-            bubble.addEventListener('click', () => {
-                console.log('Replaying TTS for last message');
-                if (window.app && window.app.audio) {
-                    window.app.audio.replayLastTTS();
-                }
-            });
-        }
-
-        this.latestAssistantMessage = messageEl;
         this.appendMessage(messageEl);
     }
 
-    // Create or update interim user message bubble (shown while listening)
+    /**
+     * Create or update interim user message bubble (shown while listening)
+     */
     updateInterimUserMessage(text) {
         if (!this.interimUserBubble) {
             // Create new interim bubble
@@ -100,6 +80,9 @@ class UIComponents {
         }
     }
 
+    /**
+     * Finalize interim user message (remove interim styling)
+     */
     finalizeInterimUserMessage(finalText) {
         if (!this.interimUserBubble) return;
 
@@ -119,6 +102,9 @@ class UIComponents {
         this.interimUserBubble = null;
     }
 
+    /**
+     * Clear interim user message bubble (if user cancels)
+     */
     clearInterimUserMessage() {
         if (this.interimUserBubble) {
             this.interimUserBubble.remove();
@@ -126,6 +112,9 @@ class UIComponents {
         }
     }
 
+    /**
+     * Add tool use indicator with new styling
+     */
     addToolUseIndicator(toolName, summary, toolInput = null) {
         const indicatorEl = document.createElement('div');
         indicatorEl.className = 'flex justify-start mb-2';
@@ -166,6 +155,9 @@ class UIComponents {
         return indicatorEl;
     }
 
+    /**
+     * Generate download link
+     */
     async generateDownloadLink(container) {
         const path = container.dataset.path;
         const fileName = path.split('/').pop();
@@ -203,32 +195,34 @@ class UIComponents {
                 </div>
             `;
 
-            // Scroll to bottom after adding download link
-            this.scrollToBottom();
-
         } catch (error) {
             container.innerHTML = '<div style="font-size: 12px; color: #e53e3e;">❌ Failed to generate download link</div>';
             console.error('Download error:', error);
-            // Scroll to bottom even on error
-            this.scrollToBottom();
         }
     }
 
+    /**
+     * Update tool use indicator with better summary
+     */
     updateToolSummary(indicatorEl, newSummary) {
         const summaryEl = indicatorEl.querySelector('.tool-summary');
         if (summaryEl) {
             summaryEl.textContent = newSummary;
-            // Scroll to bottom after updating summary
-            this.scrollToBottom();
         }
     }
 
+    /**
+     * Escape HTML to prevent XSS
+     */
     escapeHtml(text) {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
     }
 
+    /**
+     * Create message element with new DaisyUI styling
+     */
     createMessageElement(role, content, toolCalls = []) {
         const messageEl = document.createElement('div');
         const isUser = role === 'user';
@@ -264,18 +258,19 @@ class UIComponents {
         return messageEl;
     }
 
-    scrollToBottom() {
-        // Use scrollTop for more reliable scrolling
-        this.conversationEl.scrollTop = this.conversationEl.scrollHeight;
-    }
-
+    /**
+     * Append message to conversation
+     */
     appendMessage(messageEl) {
         this.conversationEl.appendChild(messageEl);
 
-        // Scroll to bottom after a short delay to ensure content is rendered
-        setTimeout(() => this.scrollToBottom(), 50);
+        // Scroll to bottom
+        messageEl.scrollIntoView({ behavior: 'smooth', block: 'end' });
     }
 
+    /**
+     * Update status display with state theme integration
+     */
     setStatus(status, type = 'normal') {
         this.statusEl.textContent = status;
 
@@ -292,10 +287,16 @@ class UIComponents {
         }
     }
 
+    /**
+     * Update session ID display
+     */
     setSessionId(sessionId) {
         this.sessionIdEl.textContent = `Session: ${sessionId}`;
     }
 
+    /**
+     * Update connection status indicator with state integration
+     */
     setConnectionStatus(status) {
         // Update the visual indicator
         if (status === 'connected') {
@@ -310,15 +311,23 @@ class UIComponents {
         }
     }
 
+    /**
+     * Clear conversation
+     */
     clearConversation() {
         this.conversationEl.innerHTML = '';
-        this.latestAssistantMessage = null;
     }
 
+    /**
+     * Toggle settings panel
+     */
     toggleSettings() {
         this.settingsPanelEl.classList.toggle('collapsed');
     }
 
+    /**
+     * Show browser compatibility warning with modal
+     */
     showBrowserWarning(issues) {
         const warningEl = document.getElementById('browser-warning');
         const textEl = document.getElementById('browser-warning-text');
@@ -341,6 +350,38 @@ class UIComponents {
         });
     }
 
+    /**
+     * Populate voice selector
+     */
+    populateVoiceSelector(voices, selectedVoice) {
+        const selectEl = document.getElementById('voice-select');
+        selectEl.innerHTML = '';
+
+        voices.forEach(voice => {
+            const option = document.createElement('option');
+            option.value = voice.name;
+            option.textContent = `${voice.name} (${voice.lang})`;
+
+            if (selectedVoice && voice.name === selectedVoice.name) {
+                option.selected = true;
+            }
+
+            selectEl.appendChild(option);
+        });
+    }
+
+    /**
+     * Escape HTML to prevent XSS
+     */
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    /**
+     * Get formatted timestamp
+     */
     getTimestamp() {
         const now = new Date();
         return now.toLocaleTimeString('en-US', {

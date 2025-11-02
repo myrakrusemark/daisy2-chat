@@ -1,3 +1,7 @@
+/**
+ * Main application logic - Orchestrates audio, WebSocket, and UI
+ */
+
 import { applyState } from './state-themes.js';
 
 class ClaudeAssistant {
@@ -24,14 +28,22 @@ class ClaudeAssistant {
         this.setupEventListeners();
     }
 
+    /**
+     * Check browser compatibility
+     */
     checkCompatibility() {
         const compat = window.AudioManager.checkCompatibility();
 
         if (!compat.supported) {
             this.ui.showBrowserWarning(compat.issues);
+        } else {
+            console.log(`Browser: ${compat.browser} - Full support detected`);
         }
     }
 
+    /**
+     * Initialize session
+     */
     async initializeSession() {
         try {
             // Create session via API
@@ -100,6 +112,8 @@ class ClaudeAssistant {
         };
 
         this.ws.onAssistantMessage = (content, toolCalls) => {
+            console.log('Assistant message received:', content);
+            console.log('Tool calls:', toolCalls);
             this.ui.addAssistantMessage(content, toolCalls);
             // TTS will be handled by separate TTS callbacks
         };
@@ -108,6 +122,7 @@ class ClaudeAssistant {
         this.toolIndicators = new Map();
 
         this.ws.onToolUse = (toolName, toolInput, summary) => {
+            console.log('Tool use:', toolName, summary);
             const indicatorEl = this.ui.addToolUseIndicator(toolName, summary, toolInput);
 
             // Store indicator for potential updates
@@ -137,6 +152,7 @@ class ClaudeAssistant {
         };
 
         this.ws.onProcessing = (status) => {
+            console.log('Processing status:', status);
 
             if (status === 'thinking') {
                 this.ui.setStatus('Claude is thinking...', 'processing');
@@ -157,8 +173,7 @@ class ClaudeAssistant {
         this.speakingToolSummary = false;
 
         this.ws.onTTSStart = (text) => {
-            console.log('TTS stream starting - exiting thinking mode');
-            // Exit thinking mode and enter speaking mode
+            console.log('TTS stream starting');
             applyState('speaking');
             this.audio.startTTSStream();
         };
@@ -182,10 +197,8 @@ class ClaudeAssistant {
                     // Play sleep sound to indicate returning to idle state
                     this.audio.playSound('sleep');
                 } else {
-                    // Reset flag for next TTS and return to processing state
-                    // (Claude is still working on the full response)
+                    // Reset flag for next TTS
                     this.speakingToolSummary = false;
-                    applyState('processing');
                 }
             });
         };
@@ -194,11 +207,9 @@ class ClaudeAssistant {
         this.ws.connect();
     }
 
-    canStartListening() {
-        const currentState = document.body.getAttribute('data-state');
-        return currentState !== 'processing';
-    }
-
+    /**
+     * Setup event listeners
+     */
     setupEventListeners() {
         // Audio callbacks
         this.audio.onTranscript = (transcript) => {
@@ -206,18 +217,17 @@ class ClaudeAssistant {
         };
 
         this.audio.onInterimTranscript = (transcript) => {
-            // Show interim transcript in a user message bubble
-            this.ui.updateInterimUserMessage(transcript);
+            this.ui.setStatus(`Listening: "${transcript}"`);
         };
 
         this.audio.onError = (error) => {
             console.error('Speech recognition error:', error);
             this.ui.setStatus(`Speech error: ${error}`, 'error');
-            this.ui.clearInterimUserMessage();
             this.stopListening();
         };
 
         this.audio.onEnd = () => {
+            console.log('Audio recognition ended, mode:', this.activationMode);
 
             // Only auto-stop for wake-word mode, not push-to-talk
             // In push-to-talk, user controls when to stop by releasing button
@@ -252,10 +262,6 @@ class ClaudeAssistant {
             if (e.code === 'Space' && !e.repeat) {
                 e.preventDefault();
 
-                if (!this.canStartListening()) {
-                    return;
-                }
-
                 // Allow interrupting TTS by stopping speech
                 if (this.isProcessing) {
                     this.audio.stopSpeaking();
@@ -282,20 +288,19 @@ class ClaudeAssistant {
             }
         });
 
-        // Push-to-talk button setup
+        // Activation mode buttons
         const pttBtn = document.getElementById('btn-push-to-talk');
 
         // Prevent context menu on long press
-        pttBtn.addEventListener('contextmenu', (e) => e.preventDefault());
-
-        // Handler for starting push-to-talk (mouse/touch)
-        const startPTT = (e) => {
+        pttBtn.addEventListener('contextmenu', (e) => {
             e.preventDefault();
+        });
 
-            if (!this.canStartListening()) {
-                return;
-            }
-
+        // Handler for starting push-to-talk
+        const startPTT = (e) => {
+            console.log('Push-to-talk button pressed');
+            e.preventDefault(); // Prevent default touch behavior
+            // Allow interrupting TTS by stopping speech
             if (this.isProcessing) {
                 this.audio.stopSpeaking();
                 this.isProcessing = false;
@@ -304,16 +309,21 @@ class ClaudeAssistant {
             this.startListening();
         };
 
-        // Handler for stopping push-to-talk (mouse/touch)
+        // Handler for stopping push-to-talk
         const stopPTT = (e) => {
+            console.log('Push-to-talk button released');
             if (this.activationMode === 'push-to-talk') {
                 this.stopListening();
             }
         };
 
-        // Attach both mouse and touch events
-        ['mousedown', 'touchstart'].forEach(evt => pttBtn.addEventListener(evt, startPTT));
-        ['mouseup', 'touchend'].forEach(evt => pttBtn.addEventListener(evt, stopPTT));
+        // Mouse events
+        pttBtn.addEventListener('mousedown', startPTT);
+        pttBtn.addEventListener('mouseup', stopPTT);
+
+        // Touch events for mobile/touchscreen
+        pttBtn.addEventListener('touchstart', startPTT);
+        pttBtn.addEventListener('touchend', stopPTT);
 
         document.getElementById('wake-word-toggle').addEventListener('change', (e) => {
             if (e.target.checked) {
@@ -369,6 +379,7 @@ class ClaudeAssistant {
 
         // Temporarily pause wake word detection if it's running
         if (this.wakeWord && this.wakeWord.isListening) {
+            console.log('Pausing wake word for push-to-talk');
             this.wakeWord.stopListening();
         }
 
@@ -412,6 +423,7 @@ class ClaudeAssistant {
         // Resume wake word detection if wake word toggle is checked
         const wakeWordToggle = document.getElementById('wake-word-toggle');
         if (wakeWordToggle && wakeWordToggle.checked && this.wakeWord && !this.wakeWord.isListening) {
+            console.log('Resuming wake word detection');
             setTimeout(() => {
                 this.wakeWord.startListening();
             }, 500);
@@ -422,6 +434,7 @@ class ClaudeAssistant {
      * Handle speech transcript
      */
     handleTranscript(transcript) {
+        console.log('Transcript received:', transcript);
 
         // Stop listening
         this.stopListening();
@@ -431,9 +444,7 @@ class ClaudeAssistant {
 
         // Send to WebSocket
         if (this.ws && this.ws.isConnected()) {
-            // Enter processing state (vibrant violet) - disables push-to-talk and wake-word
-            applyState('processing');
-            this.isProcessing = true;
+            this.ui.setStatus('Sending to Claude...', 'processing');
             this.ws.sendUserMessage(transcript);
         } else {
             this.ui.setStatus('Not connected to server', 'error');
@@ -441,60 +452,42 @@ class ClaudeAssistant {
     }
 
     /**
-     * Stop all current processes and return to idle state
-     * State-based implementation
+     * Stop all current processes and return to ready/sleep state
      */
     stopAllProcesses() {
-        const currentState = document.body.getAttribute('data-state');
-        console.log(`Stopping all processes (current state: ${currentState})...`);
+        console.log('Stopping all processes...');
 
-        // Clear any interim user message
-        this.ui.clearInterimUserMessage();
-
-        // State-based stop logic
-        switch (currentState) {
-            case 'listening':
-                // Stop speech recognition
-                if (this.isListening) {
-                    this.audio.stopListening();
-                    this.isListening = false;
-                    const btn = document.getElementById('btn-push-to-talk');
-                    if (btn) btn.classList.remove('btn-active');
-                }
-                break;
-
-            case 'processing':
-                // Interrupt backend and stop any pending TTS
-                if (this.ws && this.ws.isConnected()) {
-                    this.ws.sendInterrupt('user_stopped');
-                }
-                this.audio.stopSpeaking();
-                this.isProcessing = false;
-                break;
-
-            case 'speaking':
-                // Stop TTS playback
-                this.audio.stopSpeaking();
-                this.isProcessing = false;
-                break;
+        // Send interrupt signal to backend
+        if (this.ws && this.ws.isConnected()) {
+            this.ws.sendInterrupt('user_stopped');
         }
 
-        // Return to idle state or wake word mode
+        // Stop listening if active
+        if (this.isListening) {
+            this.stopListening();
+        }
+
+        // Stop TTS playback
+        if (this.isProcessing) {
+            this.audio.stopSpeaking();
+            this.isProcessing = false;
+        }
+
+        // If in wake word mode, return to listening for wake word
+        // Otherwise, clear activation mode
         if (this.activationMode === 'wake-word' && this.wakeWord) {
-            // Restart wake word listening
+            // Just restart wake word listening, don't turn off the mode
             this.wakeWord.stopListening();
             setTimeout(() => {
                 this.wakeWord.startListening();
                 this.ui.setStatus('Listening for wake word: "computer"');
             }, 500);
-            applyState('idle');
         } else {
-            // Clear activation mode and return to idle
+            // Not in wake word mode, so clear activation mode
             document.querySelectorAll('.mode-btn').forEach(btn => {
                 btn.classList.remove('active', 'listening');
             });
             this.activationMode = null;
-            applyState('idle');
             this.ui.setStatus('Ready to assist');
         }
 
@@ -538,8 +531,7 @@ class ClaudeAssistant {
                 // Temporarily stop wake word listening
                 this.wakeWord.stopListening();
 
-                // Set mode to wake-word and start listening for the command
-                this.setActivationMode('wake-word');
+                // Start regular listening for the command
                 this.startListening();
             };
 

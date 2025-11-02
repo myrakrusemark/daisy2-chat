@@ -1,3 +1,7 @@
+/**
+ * WebSocket client for real-time communication with backend
+ */
+
 class WebSocketClient {
     constructor(sessionId) {
         this.sessionId = sessionId;
@@ -19,15 +23,22 @@ class WebSocketClient {
         this.onTTSStart = null;
         this.onTTSAudio = null;
         this.onTTSEnd = null;
+        this.onStateChange = null;
     }
 
+    /**
+     * Connect to WebSocket server
+     */
     connect() {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const wsUrl = `${protocol}//${window.location.host}/ws/${this.sessionId}`;
 
+        console.log('Connecting to WebSocket:', wsUrl);
+
         this.ws = new WebSocket(wsUrl);
 
         this.ws.onopen = () => {
+            console.log('WebSocket connected');
             this.connected = true;
             this.reconnectAttempts = 0;
 
@@ -37,6 +48,7 @@ class WebSocketClient {
         };
 
         this.ws.onclose = () => {
+            console.log('WebSocket disconnected');
             this.connected = false;
 
             if (this.onDisconnect) {
@@ -138,11 +150,10 @@ class WebSocketClient {
                 }
                 break;
 
-            case 'process_stopped':
-                console.log('🛑 SERVER CONFIRMED: Process stopped', message.summary);
-                // Show as a tool indicator in the UI
-                if (window.app && window.app.ui) {
-                    window.app.ui.addToolUseIndicator('stop', message.summary, {});
+            case 'state_change':
+                console.log('State change from server:', message.state);
+                if (this.onStateChange) {
+                    this.onStateChange(message.state);
                 }
                 break;
 
@@ -177,8 +188,6 @@ class WebSocketClient {
             return false;
         }
 
-        console.log('🛑 BROWSER SENDING: Interrupt signal to server', reason);
-
         const message = {
             type: 'interrupt',
             reason: reason
@@ -199,6 +208,23 @@ class WebSocketClient {
         const message = {
             type: 'config_update',
             config: config
+        };
+
+        this.ws.send(JSON.stringify(message));
+        return true;
+    }
+
+    /**
+     * Send state change to server
+     */
+    sendStateChange(state) {
+        if (!this.connected) {
+            return false;
+        }
+
+        const message = {
+            type: 'state_change',
+            state: state
         };
 
         this.ws.send(JSON.stringify(message));
