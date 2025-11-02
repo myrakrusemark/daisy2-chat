@@ -353,6 +353,18 @@ class ClaudeAssistant {
             this.ui.clearConversation();
         });
 
+        // Git operations
+        document.getElementById('working-directory').addEventListener('blur', () => {
+            this.checkGitStatus();
+        });
+
+        document.getElementById('btn-init-git').addEventListener('click', async () => {
+            await this.initializeGit();
+        });
+
+        // Check git status on initial load
+        this.checkGitStatus();
+
         // Stop button
         document.getElementById('btn-stop').addEventListener('click', () => {
             this.stopAllProcesses();
@@ -589,6 +601,98 @@ class ClaudeAssistant {
 
         // Play sleep sound
         this.audio.playSound('sleep');
+    }
+
+    /**
+     * Check git status for current working directory
+     */
+    async checkGitStatus() {
+        const workingDir = document.getElementById('working-directory').value;
+
+        // Show loading state
+        document.getElementById('git-status-loading').classList.remove('hidden');
+        document.getElementById('git-status-loading').classList.add('flex');
+        document.getElementById('git-status-initialized').classList.add('hidden');
+        document.getElementById('git-status-not-initialized').classList.add('hidden');
+        document.getElementById('git-status-error').classList.add('hidden');
+
+        try {
+            const response = await fetch(`/api/git/status?path=${encodeURIComponent(workingDir)}`);
+            const data = await response.json();
+
+            // Hide loading
+            document.getElementById('git-status-loading').classList.add('hidden');
+            document.getElementById('git-status-loading').classList.remove('flex');
+
+            if (response.ok) {
+                if (data.initialized) {
+                    // Git initialized
+                    document.getElementById('git-status-initialized').classList.remove('hidden');
+                    document.getElementById('git-status-initialized').classList.add('flex');
+                } else {
+                    // Not initialized
+                    document.getElementById('git-status-not-initialized').classList.remove('hidden');
+                    document.getElementById('git-status-not-initialized').classList.add('flex');
+                }
+            } else {
+                // Error
+                document.getElementById('git-status-error').classList.remove('hidden');
+                document.getElementById('git-status-error').classList.add('flex');
+                document.getElementById('git-status-error-message').textContent = data.detail || 'Error checking git status';
+            }
+        } catch (error) {
+            console.error('Error checking git status:', error);
+            document.getElementById('git-status-loading').classList.add('hidden');
+            document.getElementById('git-status-error').classList.remove('hidden');
+            document.getElementById('git-status-error').classList.add('flex');
+            document.getElementById('git-status-error-message').textContent = 'Failed to check git status';
+        }
+    }
+
+    /**
+     * Initialize git repository
+     */
+    async initializeGit() {
+        const workingDir = document.getElementById('working-directory').value;
+        const button = document.getElementById('btn-init-git');
+
+        // Disable button
+        button.disabled = true;
+        button.innerHTML = '<span class="loading loading-spinner loading-xs"></span> Initializing...';
+
+        try {
+            const response = await fetch('/api/git/init', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    path: workingDir
+                })
+            });
+
+            const data = await response.json();
+
+            if (response.ok && data.success) {
+                // Success - refresh git status
+                await this.checkGitStatus();
+                this.ui.setStatus('Git repository initialized successfully', 'success');
+            } else {
+                // Error
+                document.getElementById('git-status-error').classList.remove('hidden');
+                document.getElementById('git-status-error').classList.add('flex');
+                document.getElementById('git-status-error-message').textContent = data.message || 'Failed to initialize git';
+                button.disabled = false;
+                button.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg> Initialize Git Repository';
+            }
+        } catch (error) {
+            console.error('Error initializing git:', error);
+            document.getElementById('git-status-error').classList.remove('hidden');
+            document.getElementById('git-status-error').classList.add('flex');
+            document.getElementById('git-status-error-message').textContent = 'Failed to initialize git repository';
+            button.disabled = false;
+            button.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg> Initialize Git Repository';
+        }
     }
 }
 

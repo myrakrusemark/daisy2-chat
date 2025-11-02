@@ -20,6 +20,7 @@ from .models import (
     DownloadLinkRequest, DownloadLinkResponse
 )
 from .download_manager import DownloadTokenManager
+from . import git_operations
 
 # Configure logging
 logging.basicConfig(
@@ -170,6 +171,76 @@ async def delete_session(session_id: str):
     if not success:
         raise HTTPException(status_code=404, detail="Session not found")
     return {"message": "Session deleted"}
+
+
+# ============================================================================
+# Git Operations
+# ============================================================================
+
+@app.get("/api/git/status")
+async def get_git_status(path: str):
+    """
+    Check if a directory is a git repository
+
+    Args:
+        path: Directory path to check
+
+    Returns:
+        Git status information
+    """
+    try:
+        # Validate path
+        directory = Path(path)
+        allowed_paths = os.getenv("ALLOWED_WORKSPACE_PATHS", "/app/workspace,/app/data").split(",")
+
+        if not git_operations.validate_path(directory, allowed_paths):
+            raise HTTPException(status_code=400, detail="Path not allowed")
+
+        # Check git status
+        status = git_operations.check_git_status(directory)
+        return status
+
+    except Exception as e:
+        log.error(f"Error checking git status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/git/init")
+async def initialize_git(data: dict):
+    """
+    Initialize a git repository in the specified directory
+
+    Args:
+        data: Dict with 'path' key
+
+    Returns:
+        Success status and message
+    """
+    try:
+        path = data.get("path")
+        if not path:
+            raise HTTPException(status_code=400, detail="Path is required")
+
+        # Validate path
+        directory = Path(path)
+        allowed_paths = os.getenv("ALLOWED_WORKSPACE_PATHS", "/app/workspace,/app/data").split(",")
+
+        if not git_operations.validate_path(directory, allowed_paths):
+            raise HTTPException(status_code=400, detail="Path not allowed")
+
+        # Initialize git repo
+        result = git_operations.init_git_repo(directory)
+
+        if not result.get("success"):
+            raise HTTPException(status_code=400, detail=result.get("message"))
+
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error(f"Error initializing git repo: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/conversations/{conversation_id}", response_model=ConversationHistory)

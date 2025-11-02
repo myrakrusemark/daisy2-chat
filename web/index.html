@@ -112,6 +112,48 @@
                         </label>
                     </div>
 
+                    <!-- Git Tracking Status -->
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text font-semibold">Git Tracking</span>
+                        </label>
+                        <div id="git-status-container" class="px-1">
+                            <div id="git-status-loading" class="flex items-center gap-2 text-sm text-base-content/50">
+                                <span class="loading loading-spinner loading-xs"></span>
+                                <span>Checking git status...</span>
+                            </div>
+                            <div id="git-status-initialized" class="hidden items-center gap-2 text-sm text-success">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <span>Git initialized - changes will be tracked</span>
+                            </div>
+                            <div id="git-status-not-initialized" class="hidden flex-col gap-2">
+                                <div class="flex items-center gap-2 text-sm text-warning">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                    </svg>
+                                    <span>Not a git repository - changes won't be tracked</span>
+                                </div>
+                                <button id="btn-init-git" class="btn btn-sm btn-outline btn-warning w-full">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                                    </svg>
+                                    Initialize Git Repository
+                                </button>
+                            </div>
+                            <div id="git-status-error" class="hidden items-center gap-2 text-sm text-error">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                                <span id="git-status-error-message">Error checking git status</span>
+                            </div>
+                        </div>
+                        <label class="label">
+                            <span class="label-text-alt">Enable rollback for Claude's changes</span>
+                        </label>
+                    </div>
+
                     <!-- TTS Info -->
                     <div class="form-control">
                         <label class="label">
