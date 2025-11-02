@@ -166,7 +166,7 @@ class WebSocketHandler:
                     log.info(f"Skipping tool summary update (interrupted): {tool_name}")
                     return
 
-                # Send tool summary update to browser
+                # Send tool summary update to browser (no TTS for tools)
                 await self.send_message({
                     "type": "tool_summary_update",
                     "tool": tool_name,
@@ -174,14 +174,39 @@ class WebSocketHandler:
                     "summary": better_summary
                 })
 
-                # Stream TTS audio for the tool summary
-                await self.stream_tts_audio(better_summary)
+            # Define callback for text content blocks
+            async def on_text_block(text: str, is_final: bool = False):
+                """Callback when a text content block is received"""
+                log.info(f"on_text_block callback called (interrupted={self.interrupted}, is_final={is_final}): {text[:50]}...")
+                if self.interrupted:
+                    log.info("Skipping text block (interrupted)")
+                    return
+
+                # If this is just marking the block as final, don't re-send the content
+                # Just send a marker message
+                if is_final:
+                    log.info("Marking text block as final response")
+                    await self.send_message({
+                        "type": "mark_final"
+                    })
+                    await self.send_processing("complete")
+                    return
+
+                # Send text block to browser with TTS
+                await self.send_message({
+                    "type": "text_block",
+                    "content": text
+                })
+
+                # Stream TTS audio for the text block
+                await self.stream_tts_audio(text)
 
             # Execute Claude Code request with streaming
             result = await self.session.claude_client.execute_streaming(
                 prompt=content,
                 on_tool_use=on_tool_use,
                 on_tool_summary_update=on_tool_summary_update,
+                on_text_block=on_text_block,
                 conversation_history=self.session.conversation.history,
                 is_interrupted=lambda: self.interrupted,
             )
@@ -198,6 +223,7 @@ class WebSocketHandler:
 
             response_text = result["response"]
             tool_calls = result.get("tool_calls", [])
+            already_sent = result.get("already_sent_as_text_block", False)
 
             # Add to conversation history IMMEDIATELY (even if interrupted)
             # This ensures anything shown in browser is also in context
@@ -214,20 +240,24 @@ class WebSocketHandler:
                 log.info("Interrupted before sending assistant message")
                 return
 
-            # Send final response to browser (WITHOUT tool_calls - those were already streamed)
-            await self.send_assistant_message(response_text, tool_calls=None)
+            # Only send final response if it wasn't already sent as a text block
+            if not already_sent:
+                # Send final response to browser (WITHOUT tool_calls - those were already streamed)
+                await self.send_assistant_message(response_text, tool_calls=None)
 
-            # Check interrupted before TTS
-            if self.interrupted:
-                log.info("Interrupted before TTS")
-                return
+                # Check interrupted before TTS
+                if self.interrupted:
+                    log.info("Interrupted before TTS")
+                    return
 
-            # Stream TTS audio to browser
-            if response_text and response_text.strip():
-                await self.stream_tts_audio(response_text)
+                # Stream TTS audio to browser
+                if response_text and response_text.strip():
+                    await self.stream_tts_audio(response_text)
 
-            # Mark processing complete
-            await self.send_processing("complete")
+                # Mark processing complete
+                await self.send_processing("complete")
+            else:
+                log.info("Final response already sent as text block, skipping duplicate (processing:complete already sent)")
 
         except asyncio.CancelledError:
             log.info("User message processing was cancelled")

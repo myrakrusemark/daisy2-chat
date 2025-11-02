@@ -121,12 +121,9 @@ class ClaudeAssistant {
             this.audio.playSound('tool');
         };
 
-        // Handle tool summary updates
+        // Handle tool summary updates (no TTS for tools)
         this.ws.onToolSummaryUpdate = (toolName, toolInput, betterSummary) => {
             console.log('Tool summary update:', toolName, betterSummary);
-
-            // Mark that we're speaking a tool summary (not the final response)
-            this.speakingToolSummary = true;
 
             // Find the most recent indicator for this tool
             const indicators = Array.from(this.toolIndicators.entries())
@@ -136,8 +133,26 @@ class ClaudeAssistant {
             if (indicators.length > 0) {
                 const [, indicatorEl] = indicators[0];
                 this.ui.updateToolSummary(indicatorEl, betterSummary);
-                // TTS is handled by server via stream_tts_audio
             }
+        };
+
+        // Handle text content blocks (like "Sure, I'll help you...")
+        this.ws.onTextBlock = (content) => {
+            console.log('Text block:', content);
+
+            // Mark as intermediate (more content may be coming)
+            this.speakingToolSummary = true;
+
+            // Display as an assistant message
+            this.ui.addAssistantMessage(content);
+            // TTS is handled by server via stream_tts_audio
+        };
+
+        // Handle mark_final message (indicates the last text block was final)
+        this.ws.onMarkFinal = () => {
+            console.log('Current response marked as final');
+            // This will make the TTS end handler return to idle/sleep
+            this.speakingToolSummary = false;
         };
 
         this.ws.onProcessing = (status) => {

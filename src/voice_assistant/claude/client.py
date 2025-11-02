@@ -342,6 +342,7 @@ Reply with ONLY the specific summary sentence starting with a verb ending in -in
         prompt: str,
         on_tool_use: Optional[Callable[[str, dict, str], None]] = None,
         on_tool_summary_update: Optional[Callable[[str, dict, str], None]] = None,
+        on_text_block: Optional[Callable[[str], None]] = None,
         conversation_history: Optional[List[Dict[str, Any]]] = None,
         is_interrupted: Optional[Callable[[], bool]] = None
     ) -> Dict[str, Any]:
@@ -352,6 +353,7 @@ Reply with ONLY the specific summary sentence starting with a verb ending in -in
             prompt: User prompt to send to Claude
             on_tool_use: Callback when a tool is used (tool_name, tool_input, summary)
             on_tool_summary_update: Callback when better summary is ready (delayed)
+            on_text_block: Callback when a text content block is received (text)
             conversation_history: Optional conversation history for context
             is_interrupted: Callable that returns True if execution should stop
 
@@ -440,6 +442,8 @@ Reply with ONLY the specific summary sentence starting with a verb ending in -in
         final_result = None
         result_received = False
         tool_calls = []
+        sent_text_blocks = []  # Track text blocks we've already sent
+        last_text_block_callback = None  # Track the last text block callback to mark it as final
 
         # Read output line by line in real-time using async I/O
         try:
@@ -493,7 +497,7 @@ Reply with ONLY the specific summary sentence starting with a verb ending in -in
                     if event_type == "system":
                         continue
 
-                    # Handle assistant messages (for tool tracking)
+                    # Handle assistant messages (for tool tracking and text blocks)
                     elif event_type == "assistant":
                         message = event.get("message", {})
                         content = message.get("content", [])
@@ -501,7 +505,26 @@ Reply with ONLY the specific summary sentence starting with a verb ending in -in
                         for item in content:
                             item_type = item.get("type")
 
-                            if item_type == "tool_use":
+                            if item_type == "text":
+                                # Text content block (like "Sure, I'll help you...")
+                                text = item.get("text", "").strip()
+                                if text and on_text_block:
+                                    # Check if interrupted before sending text block
+                                    if is_interrupted and is_interrupted():
+                                        log.info("Interrupted before text block")
+                                        return {
+                                            "success": False,
+                                            "response": "Request interrupted by user",
+                                            "tool_calls": tool_calls,
+                                        }
+
+                                    # Send text block to callback and track it
+                                    await on_text_block(text, is_final=False)
+                                    sent_text_blocks.append(text)
+                                    # Store reference to potentially mark as final later
+                                    last_text_block_callback = (text, on_text_block)
+
+                            elif item_type == "tool_use":
                                 # Tool usage notification
                                 tool_name = item.get("name", "unknown")
                                 tool_input = item.get("input", {})
@@ -565,10 +588,22 @@ Reply with ONLY the specific summary sentence starting with a verb ending in -in
             }
 
         if result_received and final_result:
+            # Check if this final result was already sent as a text block
+            final_text = final_result.strip()
+            already_sent = final_text in sent_text_blocks
+
+            # If it was already sent, mark it as final
+            if already_sent and last_text_block_callback:
+                text, callback = last_text_block_callback
+                if text == final_text:
+                    # Resend as final to update the flag
+                    await callback(final_text, is_final=True)
+
             return {
                 "success": True,
-                "response": final_result.strip(),
+                "response": final_text,
                 "tool_calls": tool_calls,
+                "already_sent_as_text_block": already_sent,
             }
         else:
             return {

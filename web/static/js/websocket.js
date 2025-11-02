@@ -14,6 +14,8 @@ class WebSocketClient {
         this.onAssistantMessage = null;
         this.onToolUse = null;
         this.onToolSummaryUpdate = null;
+        this.onTextBlock = null;
+        this.onMarkFinal = null;
         this.onProcessing = null;
         this.onError = null;
         this.onTTSStart = null;
@@ -101,6 +103,20 @@ class WebSocketClient {
                 console.log('Tool summary update:', message.tool, message.summary);
                 if (this.onToolSummaryUpdate) {
                     this.onToolSummaryUpdate(message.tool, message.input, message.summary);
+                }
+                break;
+
+            case 'text_block':
+                console.log('Text block:', message.content);
+                if (this.onTextBlock) {
+                    this.onTextBlock(message.content);
+                }
+                break;
+
+            case 'mark_final':
+                console.log('Marking current response as final');
+                if (this.onMarkFinal) {
+                    this.onMarkFinal();
                 }
                 break;
 
