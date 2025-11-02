@@ -1,3 +1,8 @@
+// Constants
+const SILENCE_TIMEOUT = 2000;  // 2 seconds of silence before auto-stop
+const RECOGNITION_RESTART_DELAY = 100;  // Delay before restarting recognition
+const AUDIO_INIT_VOLUME = 0.01;  // Low volume for audio initialization
+
 class AudioManager {
     constructor() {
         // Speech Recognition (STT)
@@ -17,7 +22,7 @@ class AudioManager {
         this.accumulatedTranscript = '';  // Buffer to accumulate transcript
         this.currentMode = null;  // Track activation mode (push-to-talk or wake-word)
         this.silenceTimer = null;  // Timer for auto-stopping after silence
-        this.silenceTimeout = 2000;  // 2 seconds of silence before auto-stop
+        this.silenceTimeout = SILENCE_TIMEOUT;
 
         // Audio playback for streamed TTS
         this.audioContext = null;

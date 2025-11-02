@@ -1,8 +1,7 @@
-/**
- * UI Components - Handle UI updates and interactions
- */
-
 import { applyState } from './state-themes.js';
+
+// Constants
+const SCROLL_DELAY = 50;  // Delay to ensure content is rendered before scrolling
 
 class UIComponents {
     constructor() {
@@ -273,7 +272,7 @@ class UIComponents {
         this.conversationEl.appendChild(messageEl);
 
         // Scroll to bottom after a short delay to ensure content is rendered
-        setTimeout(() => this.scrollToBottom(), 50);
+        setTimeout(() => this.scrollToBottom(), SCROLL_DELAY);
     }
 
     setStatus(status, type = 'normal') {

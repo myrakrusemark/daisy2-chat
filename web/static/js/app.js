@@ -1,5 +1,9 @@
 import { applyState } from './state-themes.js';
 
+// Constants
+const WAKE_WORD_RESUME_DELAY = 500;  // Delay before resuming wake word detection
+const WAKE_WORD_RESTART_DELAY = 1000;  // Delay before restarting wake word after command
+
 class ClaudeAssistant {
     constructor() {
         // Initialize components (access from window for non-module scripts)
@@ -229,7 +233,7 @@ class ClaudeAssistant {
                     setTimeout(() => {
                         this.wakeWord.startListening();
                         this.ui.setStatus('Listening for wake word: "computer"');
-                    }, 1000);
+                    }, WAKE_WORD_RESTART_DELAY);
                 }
             }
         };
@@ -414,7 +418,7 @@ class ClaudeAssistant {
         if (wakeWordToggle && wakeWordToggle.checked && this.wakeWord && !this.wakeWord.isListening) {
             setTimeout(() => {
                 this.wakeWord.startListening();
-            }, 500);
+            }, WAKE_WORD_RESUME_DELAY);
         }
     }
 
@@ -486,7 +490,7 @@ class ClaudeAssistant {
             setTimeout(() => {
                 this.wakeWord.startListening();
                 this.ui.setStatus('Listening for wake word: "computer"');
-            }, 500);
+            }, WAKE_WORD_RESUME_DELAY);
             applyState('idle');
         } else {
             // Clear activation mode and return to idle
