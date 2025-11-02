@@ -16,6 +16,7 @@ class WebSocketClient {
         this.onToolSummaryUpdate = null;
         this.onTextBlock = null;
         this.onMarkFinal = null;
+        this.onThinkingState = null;
         this.onProcessing = null;
         this.onError = null;
         this.onTTSStart = null;
@@ -117,6 +118,13 @@ class WebSocketClient {
                 console.log('Marking current response as final');
                 if (this.onMarkFinal) {
                     this.onMarkFinal();
+                }
+                break;
+
+            case 'thinking_state':
+                console.log('Thinking state:', message.state);
+                if (this.onThinkingState) {
+                    this.onThinkingState(message.state);
                 }
                 break;
 
