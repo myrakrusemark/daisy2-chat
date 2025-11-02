@@ -138,10 +138,7 @@ class ClaudeAssistant {
 
         // Handle text content blocks (like "Sure, I'll help you...")
         this.ws.onTextBlock = (content) => {
-            console.log('📝 Text block received:');
-            console.log('─'.repeat(60));
-            console.log(content);
-            console.log('─'.repeat(60));
+            console.log('Text block:', content);
 
             // Mark as intermediate (more content may be coming)
             this.speakingToolSummary = true;
@@ -158,27 +155,11 @@ class ClaudeAssistant {
             this.speakingToolSummary = false;
         };
 
-        // Track thinking time
-        this.thinkingStartTime = null;
-
-        // Handle thinking state changes
-        this.ws.onThinkingState = (state) => {
-            if (state === 'stopped') {
-                if (this.thinkingStartTime) {
-                    const thinkingDuration = Date.now() - this.thinkingStartTime;
-                    console.log(`Claude finished thinking (${(thinkingDuration / 1000).toFixed(2)}s)`);
-                    this.thinkingStartTime = null;
-                }
-            }
-        };
-
         this.ws.onProcessing = (status) => {
 
             if (status === 'thinking') {
                 this.ui.setStatus('Claude is thinking...', 'processing');
                 this.isProcessing = true;
-                // Start timing
-                this.thinkingStartTime = Date.now();
             } else if (status === 'complete') {
                 this.ui.setStatus('Response complete');
             }

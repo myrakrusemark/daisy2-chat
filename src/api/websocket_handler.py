@@ -147,23 +147,13 @@ class WebSocketHandler:
             # Send processing status
             await self.send_processing("thinking")
 
-            # Track if we've seen any response content yet (for thinking state)
-            seen_content = False
-
             # Define callback for tool usage events
             async def on_tool_use(tool_name: str, tool_input: dict, summary: str):
                 """Callback when a tool is used during streaming"""
-                nonlocal seen_content
-
                 log.info(f"on_tool_use callback called: {tool_name} (interrupted={self.interrupted})")
                 if self.interrupted:
                     log.info(f"Skipping tool use (interrupted): {tool_name}")
                     return
-
-                # First content received - Claude stopped thinking, started tool execution
-                if not seen_content:
-                    seen_content = True
-                    await self.send_message({"type": "thinking_state", "state": "stopped"})
 
                 # Send tool use notification to browser
                 await self.send_tool_use(tool_name, tool_input, summary)
@@ -187,8 +177,6 @@ class WebSocketHandler:
             # Define callback for text content blocks
             async def on_text_block(text: str, is_final: bool = False):
                 """Callback when a text content block is received"""
-                nonlocal seen_content
-
                 log.info(f"on_text_block callback called (interrupted={self.interrupted}, is_final={is_final}): {text[:50]}...")
                 if self.interrupted:
                     log.info("Skipping text block (interrupted)")
@@ -203,11 +191,6 @@ class WebSocketHandler:
                     })
                     await self.send_processing("complete")
                     return
-
-                # First content received - Claude stopped thinking, started responding
-                if not seen_content:
-                    seen_content = True
-                    await self.send_message({"type": "thinking_state", "state": "stopped"})
 
                 # Send text block to browser with TTS
                 await self.send_message({
