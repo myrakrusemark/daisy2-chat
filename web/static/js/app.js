@@ -243,7 +243,7 @@ class ClaudeAssistant {
                 if (this.wakeWord) {
                     setTimeout(() => {
                         this.wakeWord.startListening();
-                        this.ui.setStatus('Listening for wake word: "computer"');
+                        this.ui.setStatus('Listening for wake word: "hey-daisy"');
                     }, WAKE_WORD_RESTART_DELAY);
                 }
             }
@@ -512,7 +512,7 @@ class ClaudeAssistant {
             this.wakeWord.stopListening();
             setTimeout(() => {
                 this.wakeWord.startListening();
-                this.ui.setStatus('Listening for wake word: "computer"');
+                this.ui.setStatus('Listening for wake word: "hey-daisy"');
             }, WAKE_WORD_RESUME_DELAY);
             applyState('idle');
         } else {
@@ -580,12 +580,12 @@ class ClaudeAssistant {
                 this.ui.setStatus(`Listening for wake word: "${data.wakeWord}"`);
             };
 
-            await this.wakeWord.initialize('computer');
+            await this.wakeWord.initialize('hey-daisy');
         }
 
         // Start listening for wake word
         this.wakeWord.startListening();
-        this.ui.setStatus('Listening for wake word: "computer"');
+        this.ui.setStatus('Listening for wake word: "hey-daisy"');
     }
 
     /**

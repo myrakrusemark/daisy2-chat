@@ -238,7 +238,7 @@ class ClaudeAssistant {
                 if (this.wakeWord) {
                     setTimeout(() => {
                         this.wakeWord.startListening();
-                        this.ui.setStatus('Listening for wake word: "computer"');
+                        this.ui.setStatus('Listening for wake word: "hey-daisy"');
                     }, 1000);
                 }
             }
@@ -480,7 +480,7 @@ class ClaudeAssistant {
             this.wakeWord.stopListening();
             setTimeout(() => {
                 this.wakeWord.startListening();
-                this.ui.setStatus('Listening for wake word: "computer"');
+                this.ui.setStatus('Listening for wake word: "hey-daisy"');
             }, 500);
         } else {
             // Not in wake word mode, so clear activation mode
@@ -545,12 +545,12 @@ class ClaudeAssistant {
                 this.ui.setStatus(`Listening for wake word: "${data.wakeWord}"`);
             };
 
-            await this.wakeWord.initialize('computer');
+            await this.wakeWord.initialize('hey-daisy');
         }
 
         // Start listening for wake word
         this.wakeWord.startListening();
-        this.ui.setStatus('Listening for wake word: "computer"');
+        this.ui.setStatus('Listening for wake word: "hey-daisy"');
     }
 
     /**

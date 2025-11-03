@@ -64,12 +64,11 @@ NOTION_API_KEY=secret_...              # Optional: for Notion integration exampl
 The fast voice assistant (`claude-assistant/voice_to_claude_code_fast.py`) requires:
 
 1. **Anthropic API Key** - For Claude Code access
-2. **Porcupine Access Key** - For "hey daisy" wake word detection (get from Picovoice Console)
+2. **Wake Word Detection** - Uses browser Web Speech API for "hey daisy" detection
 3. **System Dependencies**:
    - `faster-whisper` - Efficient speech-to-text
    - `piper-tts` - Local text-to-speech (no API needed)
    - `webrtcvad` - Voice activity detection
-   - `pvporcupine` - Wake word detection
 
 Set in `.env`:
 ```bash
@@ -80,7 +79,7 @@ PICOVOICE_ACCESS_KEY=your_access_key_here
 
 - **Claude Code CLI** - Programmable AI coding interface
 - **UV** - Python package manager for single-file scripts
-- **Porcupine** - Wake word detection ("hey daisy")
+- **Web Speech API** - Wake word detection ("hey daisy")
 - **faster-whisper** - Fast speech-to-text (local)
 - **Piper TTS** - Local text-to-speech (no API)
 - **RealtimeSTT** - Real-time speech recognition
@@ -236,7 +235,7 @@ uv run voice_to_claude_code.py
    "--allowedTools", "Bash,Edit,Glob,Grep,Read,Write,WebFetch,WebSearch,YourNewTool"
    ```
 
-2. **Add custom wake words** (requires Porcupine training)
+2. **Add custom wake words** (browser speech recognition based)
 3. **Customize sound effects** in `sounds/` directory
 4. **Adjust working directory** with `--workingDirectory` flag
 
@@ -270,7 +269,7 @@ Requires:
 - **Main Branch**: `main`
 - **Current Feature Branch**: `feature/non-blocking-tts`
 - **Recent Work**:
-  - Porcupine wake word detection
+  - Web Speech API wake word detection
   - Faster-whisper integration
   - Sound effect feedback system
   - Non-blocking TTS implementation
@@ -487,7 +486,6 @@ See `aider_is_programmable_*.{sh,py,js}` for equivalent examples.
 1. **Wake word not detected**:
    - Check PICOVOICE_ACCESS_KEY in `.env`
    - Verify microphone permissions
-   - Test with `pvporcupinedemo` utility
 
 2. **TTS not working**:
    - Verify Piper TTS installation

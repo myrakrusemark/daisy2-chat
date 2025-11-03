@@ -27,7 +27,6 @@ COPY config/ ./config/
 COPY data/ ./data/
 COPY sandbox/ ./sandbox/
 COPY models/ ./models/
-COPY .env ./.env
 
 # Create necessary directories
 RUN mkdir -p /app/data/conversations /app/data/sandbox /app/sandbox
