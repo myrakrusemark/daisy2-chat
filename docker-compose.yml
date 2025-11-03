@@ -8,6 +8,8 @@ services:
     container_name: claude-assistant
     ports:
       - "8001:8000"
+    networks:
+      - selfhost
     environment:
       # Required
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
@@ -40,10 +42,6 @@ services:
       - /home/myra/cassistant-sandbox:/app/workspace:z
 
       # Symlink targets mounted directly into workspace (auto-generated)
-      - /run/media/myra/DropboxSD/Dropbox/Obsidian Vault/📌 Pinned/Gold.md:/app/workspace/Gold.md:z
-      - /run/media/myra/DropboxSD/Dropbox/Obsidian Vault/📌 Pinned/🛒 Shopping List.md:/app/workspace/Shopping-List.md:z
-      - /run/media/myra/DropboxSD/Dropbox/Obsidian Vault:/app/workspace/ObsidianVault:z
-      - /run/media/myra/DropboxSD/Dropbox/applications:/app/workspace/applications:z
 
     restart: unless-stopped
 
@@ -56,3 +54,7 @@ services:
         reservations:
           cpus: '1'
           memory: 512M
+
+networks:
+  selfhost:
+    external: true
