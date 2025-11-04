@@ -74,7 +74,11 @@ class SessionManager:
             # Try to cleanup old sessions
             self._cleanup_inactive_sessions()
             if len(self.sessions) >= self.max_sessions:
-                raise RuntimeError(f"Maximum sessions ({self.max_sessions}) reached")
+                # Remove oldest session to make room
+                oldest_session_id = min(self.sessions.keys(), 
+                                      key=lambda sid: self.sessions[sid].created_at)
+                log.info(f"Removing oldest session {oldest_session_id} to make room for new session")
+                await self.delete_session(oldest_session_id)
 
         # Generate session ID
         session_id = uuid.uuid4().hex[:12]

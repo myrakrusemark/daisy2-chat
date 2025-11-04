@@ -25,11 +25,10 @@ COPY src/ ./src/
 COPY web/ ./web/
 COPY config/ ./config/
 COPY data/ ./data/
-COPY sandbox/ ./sandbox/
 COPY models/ ./models/
 
 # Create necessary directories
-RUN mkdir -p /app/data/conversations /app/data/sandbox /app/sandbox
+RUN mkdir -p /app/data/conversations
 
 # Create non-root user
 RUN useradd -m -u 1000 appuser && \

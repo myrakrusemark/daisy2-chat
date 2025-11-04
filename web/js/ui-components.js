@@ -19,6 +19,10 @@ class UIComponents {
         // Track interim user message bubble
         this.interimUserBubble = null;
 
+        // Conversation persistence
+        this.conversationHistory = [];
+        this.loadConversationFromStorage();
+
         // Setup settings panel toggle
         if (this.toggleSettingsBtn) {
             this.toggleSettingsBtn.addEventListener('click', () => {
@@ -38,6 +42,14 @@ class UIComponents {
             const messageEl = this.createMessageElement('user', content);
             this.appendMessage(messageEl);
         }
+        
+        // Add to conversation history
+        this.conversationHistory.push({
+            role: 'user',
+            content: content,
+            timestamp: new Date().toISOString()
+        });
+        this.saveConversationToStorage();
     }
 
     /**
@@ -46,6 +58,15 @@ class UIComponents {
     addAssistantMessage(content, toolCalls = []) {
         const messageEl = this.createMessageElement('assistant', content, toolCalls);
         this.appendMessage(messageEl);
+        
+        // Add to conversation history
+        this.conversationHistory.push({
+            role: 'assistant',
+            content: content,
+            toolCalls: toolCalls,
+            timestamp: new Date().toISOString()
+        });
+        this.saveConversationToStorage();
     }
 
     /**
@@ -316,6 +337,8 @@ class UIComponents {
      */
     clearConversation() {
         this.conversationEl.innerHTML = '';
+        this.conversationHistory = [];
+        this.saveConversationToStorage();
     }
 
     /**
@@ -382,6 +405,47 @@ class UIComponents {
     /**
      * Get formatted timestamp
      */
+    saveConversationToStorage() {
+        try {
+            localStorage.setItem('claude_conversation_history', JSON.stringify(this.conversationHistory));
+        } catch (error) {
+            console.warn('Failed to save conversation to localStorage:', error);
+        }
+    }
+
+    loadConversationFromStorage() {
+        try {
+            const stored = localStorage.getItem('claude_conversation_history');
+            if (stored) {
+                this.conversationHistory = JSON.parse(stored);
+                this.restoreConversationUI();
+            }
+        } catch (error) {
+            console.warn('Failed to load conversation from localStorage:', error);
+            this.conversationHistory = [];
+        }
+    }
+
+    restoreConversationUI() {
+        // Clear current UI
+        this.conversationEl.innerHTML = '';
+        
+        // Restore messages from history
+        this.conversationHistory.forEach(message => {
+            if (message.role === 'user') {
+                const messageEl = this.createMessageElement('user', message.content);
+                this.conversationEl.appendChild(messageEl);
+            } else if (message.role === 'assistant') {
+                const messageEl = this.createMessageElement('assistant', message.content, message.toolCalls || []);
+                this.conversationEl.appendChild(messageEl);
+            }
+        });
+    }
+
+    getConversationHistory() {
+        return this.conversationHistory;
+    }
+
     getTimestamp() {
         const now = new Date();
         return now.toLocaleTimeString('en-US', {

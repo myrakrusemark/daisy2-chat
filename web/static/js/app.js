@@ -1,8 +1,7 @@
 import { applyState } from './state-themes.js';
 
-// Constants
-const WAKE_WORD_RESUME_DELAY = 500;  // Delay before resuming wake word detection
-const WAKE_WORD_RESTART_DELAY = 1000;  // Delay before restarting wake word after command
+// Import constants from global constants file
+const { WAKE_WORD, WAKE_WORD_DISPLAY, READY_MESSAGE, WAKE_WORD_LISTENING_MESSAGE, WAKE_WORD_RESUME_DELAY, WAKE_WORD_RESTART_DELAY } = window.CLAUDE_CONSTANTS;
 
 class ClaudeAssistant {
     constructor() {
@@ -117,7 +116,20 @@ class ClaudeAssistant {
         this.ws.onConnect = () => {
             console.log('Connected to WebSocket');
             this.ui.setConnectionStatus('connected');
-            this.ui.setStatus('Ready to assist');
+            
+            // Reset client state to idle on successful connection
+            this.isProcessing = false;
+            this.isListening = false;
+            
+            // Clear any UI states that might be stuck
+            const btn = document.getElementById('btn-push-to-talk');
+            if (btn) {
+                btn.classList.remove('btn-active');
+            }
+            
+            // Return to idle state
+            applyState('idle');
+            this.ui.setStatus(READY_MESSAGE);
 
             // Start wake word mode if checkbox is checked
             const wakeWordToggle = document.getElementById('wake-word-toggle');
@@ -129,7 +141,38 @@ class ClaudeAssistant {
         this.ws.onDisconnect = () => {
             console.log('Disconnected from WebSocket');
             this.ui.setConnectionStatus('disconnected');
-            this.ui.setStatus('Disconnected - attempting to reconnect...', 'error');
+            
+            // Reset states on disconnect
+            this.isProcessing = false;
+            this.isListening = false;
+            
+            // Stop wake word if running
+            if (this.wakeWord && this.wakeWord.isListening) {
+                this.wakeWord.stopListening();
+            }
+            
+            // Clear any UI states
+            const btn = document.getElementById('btn-push-to-talk');
+            if (btn) {
+                btn.classList.remove('btn-active');
+            }
+            
+            applyState('idle');
+            this.ui.setStatus('Connection lost - attempting to reconnect...', 'error');
+        };
+
+        this.ws.onSessionInvalid = async () => {
+            console.log('Session invalid - creating new session');
+            this.ui.setStatus('Server restarted - creating new session...', 'warning');
+            await this.createNewSession();
+        };
+
+        this.ws.onReconnectAttempt = (attempt, maxAttempts, delay) => {
+            this.ui.setStatus(`Reconnecting... (${attempt}/${maxAttempts}) - retry in ${Math.round(delay/1000)}s`, 'warning');
+        };
+
+        this.ws.onReconnectFailed = () => {
+            this.ui.setStatus('Connection failed after multiple attempts. Refresh page to retry.', 'error');
         };
 
         this.ws.onSessionInfo = (info) => {
@@ -229,7 +272,7 @@ class ClaudeAssistant {
                 // (not a tool summary)
                 if (!this.speakingToolSummary) {
                     applyState('idle');
-                    this.ui.setStatus('Ready to assist');
+                    this.ui.setStatus(READY_MESSAGE);
                     this.isProcessing = false;
 
                     // Play sleep sound to indicate returning to idle state
@@ -281,7 +324,7 @@ class ClaudeAssistant {
                 if (this.wakeWord) {
                     setTimeout(() => {
                         this.wakeWord.startListening();
-                        this.ui.setStatus('Listening for wake word: "hey-daisy"');
+                        this.ui.setStatus(WAKE_WORD_LISTENING_MESSAGE());
                     }, WAKE_WORD_RESTART_DELAY);
                 }
             }
@@ -474,7 +517,7 @@ class ClaudeAssistant {
 
         if (!this.isProcessing) {
             applyState('idle');
-            this.ui.setStatus('Ready to assist');
+            this.ui.setStatus(READY_MESSAGE);
         }
 
         // Resume wake word detection if wake word toggle is checked
@@ -553,7 +596,7 @@ class ClaudeAssistant {
             this.wakeWord.stopListening();
             setTimeout(() => {
                 this.wakeWord.startListening();
-                this.ui.setStatus('Listening for wake word: "hey-daisy"');
+                this.ui.setStatus(WAKE_WORD_LISTENING_MESSAGE());
             }, WAKE_WORD_RESUME_DELAY);
             applyState('idle');
         } else {
@@ -563,7 +606,7 @@ class ClaudeAssistant {
             });
             this.activationMode = null;
             applyState('idle');
-            this.ui.setStatus('Ready to assist');
+            this.ui.setStatus(READY_MESSAGE);
         }
 
         // Play sleep sound
@@ -586,6 +629,8 @@ class ClaudeAssistant {
         // Initialize new session
         await this.initializeSession();
     }
+
+
 
     /**
      * Start wake word detection
@@ -621,12 +666,12 @@ class ClaudeAssistant {
                 this.ui.setStatus(`Listening for wake word: "${data.wakeWord}"`);
             };
 
-            await this.wakeWord.initialize('hey-daisy');
+            await this.wakeWord.initialize(WAKE_WORD);
         }
 
         // Start listening for wake word
         this.wakeWord.startListening();
-        this.ui.setStatus('Listening for wake word: "hey-daisy"');
+        this.ui.setStatus(WAKE_WORD_LISTENING_MESSAGE());
     }
 
     /**

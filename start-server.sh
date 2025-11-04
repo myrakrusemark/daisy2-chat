@@ -4,7 +4,7 @@
 # This script allows you to pass tool restrictions and working directory settings
 
 # Default values
-WORKING_DIR="${WORKING_DIR:-./sandbox}"
+WORKING_DIR="${WORKING_DIR:-./workspace}"
 ALLOWED_TOOLS="${ALLOWED_TOOLS:-Hass* GetLiveContext todo_get_items read_file read_text_file Read Edit Write Bash Glob Grep WebFetch WebSearch}"
 PERMISSION_MODE="${PERMISSION_MODE:-bypassPermissions}"
 
@@ -29,7 +29,7 @@ while [[ $# -gt 0 ]]; do
             echo "Start the Claude Code MCP Server with configuration"
             echo ""
             echo "Options:"
-            echo "  -d, --working-dir DIR      Working directory for Claude operations (default: ./sandbox)"
+            echo "  -d, --working-dir DIR      Working directory for Claude operations (default: ./workspace)"
             echo "  -t, --allowed-tools TOOLS  Space-separated list of allowed tool patterns (default: Hass* GetLiveContext...)"
             echo "  -p, --permission-mode MODE Permission mode: bypassPermissions, acceptEdits, plan (default: bypassPermissions)"
             echo "  -h, --help                 Show this help message"

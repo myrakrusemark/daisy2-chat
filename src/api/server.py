@@ -113,7 +113,7 @@ async def create_session(session_create: SessionCreate):
         if session_create.working_directory:
             working_dir = Path(session_create.working_directory)
             # Security: validate path is within allowed directories
-            allowed_paths = os.getenv("ALLOWED_WORKSPACE_PATHS", "/app/sandbox,/app/data/custom").split(",")
+            allowed_paths = os.getenv("ALLOWED_WORKSPACE_PATHS", "/app/workspace,/app/data/custom").split(",")
             if not any(str(working_dir).startswith(allowed) for allowed in allowed_paths):
                 raise HTTPException(status_code=400, detail="Working directory not allowed")
 
@@ -162,6 +162,45 @@ async def get_session(session_id: str):
         created_at=session.created_at,
         last_activity=session.last_activity,
     )
+
+
+@app.get("/api/sessions/{session_id}/validate")
+async def validate_session(session_id: str):
+    """Validate if a session is still active and valid"""
+    session = session_manager.get_session(session_id)
+    return {"valid": session is not None}
+
+
+@app.post("/api/sessions/{session_id}/restore-conversation")
+async def restore_conversation_history(session_id: str, data: dict):
+    """Restore conversation history to a session"""
+    session = session_manager.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    conversation_history = data.get("conversation_history", [])
+    
+    try:
+        # Clear existing conversation
+        session.conversation.clear()
+        
+        # Restore conversation history
+        for message in conversation_history:
+            role = message.get("role")
+            content = message.get("content", "")
+            tool_calls = message.get("tool_calls", [])
+            
+            if role == "user":
+                session.conversation.add_user_message(content)
+            elif role == "assistant":
+                session.conversation.add_assistant_message(content, tool_calls=tool_calls)
+        
+        log.info(f"Restored {len(conversation_history)} messages to session {session_id}")
+        return {"success": True, "messages_restored": len(conversation_history)}
+        
+    except Exception as e:
+        log.error(f"Error restoring conversation history: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to restore conversation history: {str(e)}")
 
 
 @app.delete("/api/sessions/{session_id}")
@@ -274,7 +313,7 @@ async def update_session_config(session_id: str, config_update: ConfigUpdate):
     working_dir = None
     if config_update.working_directory:
         working_dir = Path(config_update.working_directory)
-        allowed_paths = os.getenv("ALLOWED_WORKSPACE_PATHS", "/app/sandbox,/app/data/custom").split(",")
+        allowed_paths = os.getenv("ALLOWED_WORKSPACE_PATHS", "/app/workspace,/app/data/custom").split(",")
         if not any(str(working_dir).startswith(allowed) for allowed in allowed_paths):
             raise HTTPException(status_code=400, detail="Working directory not allowed")
 
@@ -298,12 +337,18 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
     await websocket.accept()
     log.info(f"WebSocket connected for session {session_id}")
 
-    # Get session
+    # Get session, create new one if not found
     session = session_manager.get_session(session_id)
     if not session:
-        await websocket.send_json({"type": "error", "message": "Session not found"})
-        await websocket.close()
-        return
+        log.info(f"Session {session_id} not found, creating new session")
+        # Create new session with default workspace
+        import os
+        session = await session_manager.create_session(
+            working_directory=os.getenv("DEFAULT_WORKING_DIRECTORY", "/app/workspace"),
+            allowed_tools=[],
+            permission_mode="allow"
+        )
+        log.info(f"Created new session {session.session_id} for WebSocket connection")
 
     # Attach websocket to session
     session.websocket = websocket

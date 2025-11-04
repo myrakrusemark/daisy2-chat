@@ -13,7 +13,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Update status based on wake word toggle
     function updateStatus() {
         if (wakeWordToggle.checked) {
-            statusDisplay.textContent = 'Ready to assist - Say "Computer"';
+            statusDisplay.textContent = window.CLAUDE_CONSTANTS.READY_MESSAGE;
         } else {
             statusDisplay.textContent = 'Ready to assist';
         }

@@ -2,7 +2,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SANDBOX_DIR="/home/myra/cassistant-sandbox"
+WORKSPACE_DIR="/home/myra/selfhost/cassistant/workspace"
 COMPOSE_FILE="$SCRIPT_DIR/docker-compose.yml"
 BUILD_FLAG=""
 
@@ -12,7 +12,7 @@ if [ "$1" = "--build" ]; then
     echo "Build flag detected - will rebuild container image"
 fi
 
-echo "Scanning for symlinks in $SANDBOX_DIR..."
+echo "Scanning for symlinks in $WORKSPACE_DIR..."
 
 # Find all symlinks and build volume mount entries
 SYMLINK_MOUNTS=""
@@ -30,7 +30,7 @@ while IFS= read -r -d '' symlink; do
     else
         echo "  Warning: $link_name points to non-existent target: $target"
     fi
-done < <(find "$SANDBOX_DIR" -maxdepth 1 -type l -print0)
+done < <(find "$WORKSPACE_DIR" -maxdepth 1 -type l -print0)
 
 # Create a temporary file with updated docker-compose.yml
 TEMP_FILE=$(mktemp)

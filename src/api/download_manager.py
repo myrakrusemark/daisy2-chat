@@ -89,7 +89,7 @@ class DownloadTokenManager:
 
         Args:
             file_path: Path to validate
-            session_working_dir: Session's working directory (sandbox)
+            session_working_dir: Session's working directory (workspace)
 
         Returns:
             True if path is safe, False otherwise
@@ -100,18 +100,18 @@ class DownloadTokenManager:
             if file_path.is_symlink():
                 # Get the symlink location (not the target)
                 symlink_parent = file_path.parent.resolve()
-                resolved_sandbox = session_working_dir.resolve()
+                resolved_workspace = session_working_dir.resolve()
 
-                # Check if symlink is within sandbox
-                if symlink_parent.is_relative_to(resolved_sandbox):
+                # Check if symlink is within workspace
+                if symlink_parent.is_relative_to(resolved_workspace):
                     return True
 
             # For regular files, resolve and check normally
             resolved_file = file_path.resolve()
-            resolved_sandbox = session_working_dir.resolve()
+            resolved_workspace = session_working_dir.resolve()
 
-            # Check if file is within sandbox
-            return resolved_file.is_relative_to(resolved_sandbox)
+            # Check if file is within workspace
+            return resolved_file.is_relative_to(resolved_workspace)
         except (ValueError, OSError) as e:
             log.warning(f"Path validation error: {e}")
             return False
@@ -130,7 +130,7 @@ class DownloadTokenManager:
         Args:
             file_path: Path to file or directory (relative to session working dir)
             session_id: Session ID that owns this file
-            session_working_dir: Session's working directory (sandbox)
+            session_working_dir: Session's working directory (workspace)
             expiry_minutes: Minutes until token expires (default 5)
             max_size_mb: Maximum file/directory size in MB (default 100, None for unlimited)
 
@@ -142,7 +142,7 @@ class DownloadTokenManager:
         if not path.is_absolute():
             path = session_working_dir / path
 
-        # Validate path is within sandbox
+        # Validate path is within workspace
         if not self._validate_path(path, session_working_dir):
             log.warning(f"Path validation failed: {path} not in {session_working_dir}")
             return None

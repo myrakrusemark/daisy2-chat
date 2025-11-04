@@ -1,7 +1,5 @@
-// Constants
-const SILENCE_TIMEOUT = 2000;  // 2 seconds of silence before auto-stop
-const RECOGNITION_RESTART_DELAY = 100;  // Delay before restarting recognition
-const AUDIO_INIT_VOLUME = 0.01;  // Low volume for audio initialization
+// Import constants from global constants file
+const { SILENCE_TIMEOUT, RECOGNITION_RESTART_DELAY, AUDIO_INIT_VOLUME } = window.CLAUDE_CONSTANTS;
 
 class AudioManager {
     constructor() {

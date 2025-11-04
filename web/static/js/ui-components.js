@@ -7,6 +7,7 @@ class UIComponents {
     constructor() {
         // Get DOM elements
         this.conversationEl = document.getElementById('conversation');
+        this.scrollableEl = this.conversationEl.parentElement; // The actual scrollable container
         this.statusEl = document.getElementById('status-display');
         this.sessionIdEl = document.getElementById('session-id');
         this.connectionStatusEl = document.getElementById('connection-status');
@@ -20,6 +21,12 @@ class UIComponents {
 
         // Track latest assistant message for TTS replay
         this.latestAssistantMessage = null;
+
+        // Conversation persistence (no session storage)
+        this.conversationHistory = [];
+
+        // Fix mobile viewport height issues
+        // this.setupMobileViewport();
 
         // Setup settings panel toggle
         if (this.toggleSettingsBtn) {
@@ -37,6 +44,13 @@ class UIComponents {
             const messageEl = this.createMessageElement('user', content);
             this.appendMessage(messageEl);
         }
+        
+        // Add to conversation history
+        this.conversationHistory.push({
+            role: 'user',
+            content: content,
+            timestamp: new Date().toISOString()
+        });
     }
 
     addAssistantMessage(content, toolCalls = []) {
@@ -67,6 +81,14 @@ class UIComponents {
 
         this.latestAssistantMessage = messageEl;
         this.appendMessage(messageEl);
+        
+        // Add to conversation history
+        this.conversationHistory.push({
+            role: 'assistant',
+            content: content,
+            toolCalls: toolCalls,
+            timestamp: new Date().toISOString()
+        });
     }
 
     // Create or update interim user message bubble (shown while listening)
@@ -264,8 +286,10 @@ class UIComponents {
     }
 
     scrollToBottom() {
-        // Use scrollTop for more reliable scrolling
-        this.conversationEl.scrollTop = this.conversationEl.scrollHeight;
+        // Scroll the actual scrollable container, not just the content
+        if (this.scrollableEl) {
+            this.scrollableEl.scrollTop = this.scrollableEl.scrollHeight;
+        }
     }
 
     appendMessage(messageEl) {
@@ -312,6 +336,7 @@ class UIComponents {
     clearConversation() {
         this.conversationEl.innerHTML = '';
         this.latestAssistantMessage = null;
+        this.conversationHistory = [];
     }
 
     toggleSettings() {
@@ -338,6 +363,52 @@ class UIComponents {
         dismissBtn.addEventListener('click', () => {
             warningEl.close();
         });
+    }
+
+    saveConversationToStorage() {
+        // No session storage
+    }
+
+    loadConversationFromStorage() {
+        // No session storage
+    }
+
+    restoreConversationUI() {
+        // Clear current UI
+        this.conversationEl.innerHTML = '';
+        this.latestAssistantMessage = null;
+        
+        // Restore messages from history
+        this.conversationHistory.forEach(message => {
+            if (message.role === 'user') {
+                const messageEl = this.createMessageElement('user', message.content);
+                this.conversationEl.appendChild(messageEl);
+            } else if (message.role === 'assistant') {
+                const messageEl = this.createMessageElement('assistant', message.content, message.toolCalls || []);
+                this.conversationEl.appendChild(messageEl);
+                this.latestAssistantMessage = messageEl;
+                
+                // Add TTS replay capability to the last assistant message
+                const bubble = messageEl.querySelector('.chat-bubble-secondary');
+                if (bubble) {
+                    bubble.classList.add('tts-replay-enabled');
+                    bubble.style.cursor = 'pointer';
+                    bubble.addEventListener('click', () => {
+                        console.log('Replaying TTS for restored message');
+                        if (window.app && window.app.audio) {
+                            window.app.audio.replayLastTTS();
+                        }
+                    });
+                }
+            }
+        });
+        
+        // Scroll to bottom
+        setTimeout(() => this.scrollToBottom(), SCROLL_DELAY);
+    }
+
+    getConversationHistory() {
+        return this.conversationHistory;
     }
 
     getTimestamp() {

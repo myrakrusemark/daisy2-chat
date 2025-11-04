@@ -36,7 +36,7 @@ This repository demonstrates how to use **Claude Code programmatically** - treat
 - **`start.sh`** - Startup script for fast voice assistant
 - **`sounds/`** - Audio feedback files (wake.mp3, tool.mp3, etc.)
 - **`output/`** - Conversation logs (YAML format)
-- **`sandbox/`** - Isolated workspace for Claude Code execution
+- **`workspace/`** - Isolated workspace for Claude Code execution
 
 ### Documentation (ai_docs/)
 
@@ -206,7 +206,7 @@ uv run voice_to_claude_code_fast.py
 **Tool Allowlist** (configurable in script):
 - `Bash`, `Edit`, `Glob`, `Grep`, `Read`, `Write`, `WebFetch`, `WebSearch`
 
-**Working Directory**: `sandbox/` (isolated workspace)
+**Working Directory**: `workspace/` (isolated workspace)
 
 ### Original Voice Assistant
 

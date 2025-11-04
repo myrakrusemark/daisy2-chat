@@ -1,13 +1,13 @@
 # File Downloads MCP Server
 
-Secure file download system that allows Claude Code to generate temporary, single-use download links for files and directories in the sandbox.
+Secure file download system that allows Claude Code to generate temporary, single-use download links for files and directories in the workspace.
 
 ## Features
 
 - 🔒 **Secure**: Temporary tokens with configurable expiry (1-60 minutes)
 - 🔐 **Single-use**: Links are invalidated after one download
 - 📁 **Directory support**: Automatically zips directories for download
-- 🛡️ **Sandboxed**: Files must be within session working directory
+- 🛡️ **Secured**: Files must be within session working directory
 - 📊 **Size limits**: Default 100MB limit to prevent abuse
 - 🧹 **Auto-cleanup**: Background task removes expired tokens
 
@@ -41,7 +41,7 @@ Secure file download system that allows Claude Code to generate temporary, singl
 ┌──────────────────────────────────┐
 │  FastAPI Server                  │
 │  POST /api/download/generate     │
-│  - Validates path in sandbox     │
+│  - Validates path in workspace   │
 │  - Creates UUID token            │
 │  - Returns download URL          │
 └──────┬───────────────────────────┘
@@ -104,7 +104,7 @@ url = generate_download_link("output/report.pdf")
 url = generate_download_link("project/src", expiry_minutes=10)
 
 # Absolute path
-url = generate_download_link("/app/sandbox/data/export.csv")
+url = generate_download_link("/app/workspace/data/export.csv")
 ```
 
 #### `list_download_stats`
@@ -119,7 +119,7 @@ Get statistics about active download tokens.
 stats = list_download_stats()
 # {
 #   "session_id": "abc123",
-#   "working_directory": "/app/sandbox",
+#   "working_directory": "/app/workspace",
 #   "statistics": {
 #     "total_tokens": 5,
 #     "active_tokens": 2,
@@ -201,7 +201,7 @@ download_manager = DownloadTokenManager(
 token = download_manager.create_token(
     file_path="data.csv",
     session_id="abc123",
-    session_working_dir=Path("/app/sandbox"),
+    session_working_dir=Path("/app/workspace"),
     expiry_minutes=5,      # Token lifetime
     max_size_mb=100        # Size limit (None for unlimited)
 )

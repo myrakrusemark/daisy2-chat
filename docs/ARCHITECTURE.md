@@ -113,9 +113,9 @@ Three pre-configured security profiles:
 - **Coding** (`coding.yml`): Full file ops + Bash + Web
 - **Full** (`full.yml`): Everything including custom tools
 
-### Sandbox Isolation
+### Workspace Isolation
 
-- Default working directory: `./sandbox`
+- Default working directory: `./workspace`
 - No symlinks to sensitive directories
 - Gitignored to prevent accidental commits
 

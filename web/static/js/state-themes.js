@@ -81,9 +81,9 @@ export function applyState(stateName) {
         if (stateName === 'idle') {
             const wakeWordToggle = document.getElementById('wake-word-toggle');
             if (wakeWordToggle && wakeWordToggle.checked) {
-                statusDisplay.textContent = 'Ready to assist - Say "Computer"';
+                statusDisplay.textContent = window.CLAUDE_CONSTANTS.WAKE_WORD_LISTENING_MESSAGE();
             } else {
-                statusDisplay.textContent = theme.status;
+                statusDisplay.textContent = window.CLAUDE_CONSTANTS.READY_MESSAGE;
             }
         } else {
             statusDisplay.textContent = theme.status;

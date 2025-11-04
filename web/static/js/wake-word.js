@@ -10,7 +10,7 @@ class WakeWordManager {
         this.accessKey = accessKey;
         this.porcupine = null;
         this.isListening = false;
-        this.wakeWord = 'hey-daisy'; // Default wake word
+        this.wakeWord = window.CLAUDE_CONSTANTS.WAKE_WORD; // Default wake word
 
         // Callbacks
         this.onWakeWordDetected = null;
@@ -24,7 +24,7 @@ class WakeWordManager {
      * Note: Since we're using vanilla JS without a build tool,
      * we'll use the Porcupine Web SDK via CDN or bundled version
      */
-    async initialize(wakeWord = 'hey-daisy') {
+    async initialize(wakeWord = window.CLAUDE_CONSTANTS.WAKE_WORD) {
         try {
             this.wakeWord = wakeWord;
 
@@ -84,8 +84,9 @@ class WakeWordManager {
                     const transcript = event.results[i][0].transcript.toLowerCase().trim();
                     console.log('Heard:', transcript);
 
-                    // Check if wake word was detected (handle both "hey-daisy" and "hey daisy")
-                    if (transcript.includes('hey daisy') || transcript.includes('hey-daisy')) {
+                    // Check if wake word was detected (handle both hyphenated and spaced versions)
+                    const wakeWordSpaced = this.wakeWord.replace('-', ' ');
+                    if (transcript.includes(wakeWordSpaced) || transcript.includes(this.wakeWord)) {
                         console.log(`Wake word "${this.wakeWord}" detected!`);
                         if (this.onWakeWordDetected) {
                             this.onWakeWordDetected({

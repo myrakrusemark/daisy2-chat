@@ -417,7 +417,7 @@ class CassistantApp {
         if (this.wakeWord) {
             try {
                 await this.wakeWord.start();
-                this.setStatus('Ready to assist - Say "Computer"');
+                this.setStatus(window.CLAUDE_CONSTANTS.READY_MESSAGE);
             } catch (error) {
                 console.error('Wake word error:', error);
             }

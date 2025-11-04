@@ -21,6 +21,9 @@ class WebSocketClient {
         this.onTTSStart = null;
         this.onTTSAudio = null;
         this.onTTSEnd = null;
+        this.onSessionInvalid = null;
+        this.onReconnectAttempt = null;
+        this.onReconnectFailed = null;
     }
 
     connect() {
@@ -33,6 +36,7 @@ class WebSocketClient {
             this.connected = true;
             this.reconnectAttempts = 0;
 
+            // Server handles missing sessions automatically
             if (this.onConnect) {
                 this.onConnect();
             }
@@ -51,9 +55,19 @@ class WebSocketClient {
                 const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
                 console.log(`Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
 
+                // Update status with reconnection attempt
+                if (this.onReconnectAttempt) {
+                    this.onReconnectAttempt(this.reconnectAttempts, this.maxReconnectAttempts, delay);
+                }
+
                 setTimeout(() => {
                     this.connect();
                 }, delay);
+            } else {
+                // Max attempts reached
+                if (this.onReconnectFailed) {
+                    this.onReconnectFailed();
+                }
             }
         };
 
@@ -236,6 +250,23 @@ class WebSocketClient {
      */
     isConnected() {
         return this.connected;
+    }
+
+    /**
+     * Validate session with server
+     */
+    async validateSession() {
+        try {
+            const response = await fetch(`/api/sessions/${this.sessionId}/validate`);
+            if (response.ok) {
+                const data = await response.json();
+                return data.valid === true;
+            }
+            return false;
+        } catch (error) {
+            console.error('Error validating session:', error);
+            return false;
+        }
     }
 }
 
