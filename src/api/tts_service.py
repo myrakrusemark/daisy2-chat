@@ -24,8 +24,8 @@ class TTSService:
             model_path: Path to Piper .onnx model file
         """
         if model_path is None:
-            # Default to the low-quality voice we downloaded
-            model_path = Path(__file__).parent.parent.parent / "models" / "piper" / "en_US-lessac-low.onnx"
+            # Default to the British English female voice
+            model_path = Path(__file__).parent.parent.parent / "models" / "piper" / "en_GB-southern_english_female-low.onnx"
 
         self.model_path = model_path
         self.voice = None

@@ -18,6 +18,9 @@ class ClaudeAssistant {
         this.isListening = false;
         this.isProcessing = false;
 
+        // Load saved settings from cookies
+        this.loadSettings();
+
         // Check browser compatibility
         this.checkCompatibility();
 
@@ -26,6 +29,41 @@ class ClaudeAssistant {
 
         // Setup event listeners
         this.setupEventListeners();
+    }
+
+    /**
+     * Load settings from cookies
+     */
+    loadSettings() {
+        // Load wake word setting
+        const wakeWordEnabled = this.getCookie('wakeWordEnabled');
+        if (wakeWordEnabled !== null) {
+            const toggle = document.getElementById('wake-word-toggle');
+            if (toggle) {
+                toggle.checked = wakeWordEnabled === 'true';
+            }
+        }
+    }
+
+    /**
+     * Get cookie value
+     */
+    getCookie(name) {
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) {
+            return parts.pop().split(';').shift();
+        }
+        return null;
+    }
+
+    /**
+     * Set cookie value
+     */
+    setCookie(name, value, days = 365) {
+        const expires = new Date();
+        expires.setTime(expires.getTime() + (days * 24 * 60 * 60 * 1000));
+        document.cookie = `${name}=${value};expires=${expires.toUTCString()};path=/`;
     }
 
     checkCompatibility() {
@@ -331,6 +369,9 @@ class ClaudeAssistant {
         ['mouseup', 'touchend'].forEach(evt => pttBtn.addEventListener(evt, stopPTT));
 
         document.getElementById('wake-word-toggle').addEventListener('change', (e) => {
+            // Save setting to cookie
+            this.setCookie('wakeWordEnabled', e.target.checked.toString());
+            
             if (e.target.checked) {
                 // Start wake word mode
                 this.startWakeWord();
