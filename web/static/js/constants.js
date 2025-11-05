@@ -21,9 +21,9 @@ window.CLAUDE_CONSTANTS = {
     SERVER_TRANSCRIPTION: {
         ENABLED: true,                    // Enable server transcription by default
         FALLBACK_TO_BROWSER: true,        // Fallback to browser STT if server unavailable
-        AUDIO_CHUNK_INTERVAL: 250,        // Send audio chunks every 250ms
+        AUDIO_CHUNK_INTERVAL: 1000,       // Send audio chunks every 1 second for WAV
         PREFERRED_SAMPLE_RATE: 16000,     // 16kHz for Whisper
         PREFERRED_CHANNELS: 1,            // Mono audio
-        MIME_TYPE: 'audio/webm;codecs=opus' // Audio format for MediaRecorder
+        MIME_TYPE: 'audio/wav'            // WAV format for simpler processing
     }
 };

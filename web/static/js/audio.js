@@ -453,12 +453,29 @@ class AudioManager {
             });
 
             // Set up MediaRecorder for audio streaming
-            console.log('Setting up MediaRecorder with MIME type:', SERVER_TRANSCRIPTION.MIME_TYPE);
-            console.log('MediaRecorder.isTypeSupported:', MediaRecorder.isTypeSupported(SERVER_TRANSCRIPTION.MIME_TYPE));
+            let mimeType = SERVER_TRANSCRIPTION.MIME_TYPE;
+            console.log('Trying MediaRecorder with MIME type:', mimeType);
+            console.log('MediaRecorder.isTypeSupported:', MediaRecorder.isTypeSupported(mimeType));
             
-            this.mediaRecorder = new MediaRecorder(stream, {
-                mimeType: SERVER_TRANSCRIPTION.MIME_TYPE
-            });
+            // Fallback MIME types if WAV isn't supported
+            const fallbackTypes = [
+                'audio/wav',
+                'audio/webm;codecs=opus',
+                'audio/webm',
+                'audio/mp4',
+                '' // Let browser choose
+            ];
+            
+            for (const type of fallbackTypes) {
+                if (MediaRecorder.isTypeSupported(type) || type === '') {
+                    mimeType = type;
+                    console.log('Using MIME type:', mimeType || 'browser default');
+                    break;
+                }
+            }
+            
+            const options = mimeType ? { mimeType } : {};
+            this.mediaRecorder = new MediaRecorder(stream, options);
             
             console.log('MediaRecorder created successfully, state:', this.mediaRecorder.state);
 

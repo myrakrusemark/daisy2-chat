@@ -169,26 +169,46 @@ class WhisperTranscriptionService:
             return False
 
     async def _process_webm_audio(self, audio_data: bytes):
-        """Process WebM audio data using FFmpeg conversion"""
+        """Process WAV audio data directly"""
         try:
-            log.info(f"Processing WebM audio: {len(audio_data)} bytes")
+            log.info(f"Processing WAV audio: {len(audio_data)} bytes")
             
-            # Convert WebM to numpy array for Whisper
-            audio_array = await self._convert_audio_to_wav(audio_data)
-            if audio_array is None:
-                log.warning("Failed to convert WebM audio")
-                return
-            
-            # Skip very short audio
-            if len(audio_array) < self.sample_rate * 0.1:  # Less than 100ms
-                log.debug("Skipping short audio segment")
-                return
-            
-            # Process with Whisper
-            await self._process_audio_async(audio_array)
+            # For WAV format, try direct conversion first
+            try:
+                # WAV files have a 44-byte header, skip it and convert to numpy
+                if len(audio_data) < 44:
+                    log.warning("Audio data too short (less than WAV header)")
+                    return
+                
+                # Extract raw PCM data (skip WAV header)
+                pcm_data = audio_data[44:]
+                
+                # Convert to numpy array (assuming 16-bit PCM)
+                audio_array = np.frombuffer(pcm_data, dtype=np.int16).astype(np.float32) / 32768.0
+                
+                log.info(f"Converted WAV to numpy: {len(audio_array)} samples, {len(audio_array)/self.sample_rate:.2f}s")
+                
+                # Skip very short audio
+                if len(audio_array) < self.sample_rate * 0.1:  # Less than 100ms
+                    log.debug("Skipping short audio segment")
+                    return
+                
+                # Process with Whisper directly
+                await self._process_audio_async(audio_array)
+                
+            except Exception as wav_error:
+                log.warning(f"Direct WAV processing failed: {wav_error}, trying FFmpeg fallback")
+                
+                # Fallback to FFmpeg conversion if direct parsing fails
+                audio_array = await self._convert_audio_to_wav(audio_data)
+                if audio_array is None:
+                    log.warning("FFmpeg conversion also failed")
+                    return
+                
+                await self._process_audio_async(audio_array)
             
         except Exception as e:
-            log.error(f"Error processing WebM audio: {e}")
+            log.error(f"Error processing audio: {e}")
 
     async def _convert_audio_to_wav(self, audio_data: bytes) -> Optional[np.ndarray]:
         """Convert WebM/Opus audio to numpy array for Whisper"""
