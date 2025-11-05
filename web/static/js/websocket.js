@@ -24,6 +24,13 @@ class WebSocketClient {
         this.onSessionInvalid = null;
         this.onReconnectAttempt = null;
         this.onReconnectFailed = null;
+        
+        // Server transcription callbacks
+        this.onServerTranscriptionResult = null;
+        this.onTranscriptionStatus = null;
+        this.onServerTranscriptionStarted = null;
+        this.onServerTranscriptionStopped = null;
+        this.onTranscriptionUnavailable = null;
     }
 
     connect() {
@@ -176,6 +183,46 @@ class WebSocketClient {
                 }
                 break;
 
+            case 'server_transcription_result':
+                console.log('Server transcription result:', message);
+                if (this.onServerTranscriptionResult) {
+                    this.onServerTranscriptionResult({
+                        text: message.text,
+                        is_final: message.is_final,
+                        confidence: message.confidence,
+                        language: message.language
+                    });
+                }
+                break;
+
+            case 'transcription_status':
+                console.log('Transcription status:', message.status);
+                if (this.onTranscriptionStatus) {
+                    this.onTranscriptionStatus(message.status);
+                }
+                break;
+
+            case 'server_transcription_started':
+                console.log('Server transcription started:', message.session_id);
+                if (this.onServerTranscriptionStarted) {
+                    this.onServerTranscriptionStarted(message.session_id);
+                }
+                break;
+
+            case 'server_transcription_stopped':
+                console.log('Server transcription stopped');
+                if (this.onServerTranscriptionStopped) {
+                    this.onServerTranscriptionStopped();
+                }
+                break;
+
+            case 'transcription_unavailable':
+                console.log('Server transcription unavailable, fallback:', message.fallback);
+                if (this.onTranscriptionUnavailable) {
+                    this.onTranscriptionUnavailable(message.fallback);
+                }
+                break;
+
             default:
                 console.warn('Unknown message type:', type);
         }
@@ -229,6 +276,72 @@ class WebSocketClient {
         const message = {
             type: 'config_update',
             config: config
+        };
+
+        this.ws.send(JSON.stringify(message));
+        return true;
+    }
+
+    /**
+     * Start server transcription
+     */
+    startServerTranscription() {
+        if (!this.connected) {
+            console.error('WebSocket not connected');
+            return false;
+        }
+
+        const message = {
+            type: 'start_server_transcription'
+        };
+
+        this.ws.send(JSON.stringify(message));
+        return true;
+    }
+
+    /**
+     * Stop server transcription
+     */
+    stopServerTranscription() {
+        if (!this.connected) {
+            return false;
+        }
+
+        const message = {
+            type: 'stop_server_transcription'
+        };
+
+        this.ws.send(JSON.stringify(message));
+        return true;
+    }
+
+    /**
+     * Send audio chunk for server transcription
+     */
+    sendAudioChunk(audioData) {
+        if (!this.connected) {
+            return false;
+        }
+
+        const message = {
+            type: 'audio_chunk',
+            data: audioData
+        };
+
+        this.ws.send(JSON.stringify(message));
+        return true;
+    }
+
+    /**
+     * Get transcription status
+     */
+    getTranscriptionStatus() {
+        if (!this.connected) {
+            return false;
+        }
+
+        const message = {
+            type: 'get_transcription_status'
         };
 
         this.ws.send(JSON.stringify(message));

@@ -18,6 +18,7 @@ from .models import (
 )
 from .session_manager import Session
 from .tts_service import TTSService
+from .whisper_service import WhisperTranscriptionService, TranscriptionResult
 
 log = logging.getLogger(__name__)
 
@@ -41,6 +42,16 @@ class WebSocketHandler:
 
         # Initialize TTS service
         self.tts = TTSService()
+        
+        # Initialize Whisper transcription service (optional)
+        try:
+            self.whisper = WhisperTranscriptionService()
+            self.whisper_available = True
+            log.info("Whisper transcription service initialized")
+        except ImportError:
+            self.whisper = None
+            self.whisper_available = False
+            log.info("Whisper transcription not available - using browser STT only")
 
     async def send_message(self, message_data: dict):
         """
@@ -336,6 +347,106 @@ class WebSocketHandler:
             log.error(f"Error updating config: {e}")
             await self.send_error(f"Failed to update configuration: {str(e)}")
 
+    async def handle_start_server_transcription(self):
+        """Start server-side transcription after wake word detection"""
+        if not self.whisper_available:
+            log.warning("Whisper transcription not available, falling back to browser STT")
+            await self.send_message({
+                "type": "transcription_unavailable",
+                "fallback": "browser_stt"
+            })
+            return False
+
+        try:
+            # Create unique session ID for this transcription
+            transcription_session_id = f"{self.session.session_id}_{int(asyncio.get_event_loop().time())}"
+            
+            # Set up transcription callback
+            def on_transcription_result(result: TranscriptionResult):
+                # Send transcription result to browser asynchronously
+                asyncio.create_task(self.send_message({
+                    "type": "server_transcription_result",
+                    "text": result.text,
+                    "is_final": result.is_final,
+                    "confidence": result.confidence,
+                    "language": result.language
+                }))
+
+            # Start transcription
+            success = await self.whisper.start_transcription(
+                session_id=transcription_session_id,
+                callback=on_transcription_result
+            )
+
+            if success:
+                await self.send_message({
+                    "type": "server_transcription_started",
+                    "session_id": transcription_session_id
+                })
+                log.info(f"Started server transcription session: {transcription_session_id}")
+                return True
+            else:
+                await self.send_error("Failed to start server transcription")
+                return False
+
+        except Exception as e:
+            log.error(f"Error starting server transcription: {e}")
+            await self.send_error(f"Server transcription error: {str(e)}")
+            return False
+
+    async def handle_stop_server_transcription(self):
+        """Stop server-side transcription"""
+        if not self.whisper_available or not self.whisper:
+            return
+
+        try:
+            await self.whisper.stop_transcription()
+            await self.send_message({
+                "type": "server_transcription_stopped"
+            })
+            log.info("Stopped server transcription")
+
+        except Exception as e:
+            log.error(f"Error stopping server transcription: {e}")
+
+    async def handle_audio_chunk(self, audio_data: str):
+        """
+        Handle incoming audio chunk for server transcription
+        
+        Args:
+            audio_data: Base64 encoded audio data
+        """
+        if not self.whisper_available or not self.whisper:
+            return
+
+        try:
+            # Decode base64 audio data
+            audio_bytes = base64.b64decode(audio_data)
+            
+            # Process audio chunk
+            success = await self.whisper.process_audio_chunk(audio_bytes)
+            
+            if not success:
+                log.warning("Failed to process audio chunk")
+
+        except Exception as e:
+            log.error(f"Error processing audio chunk: {e}")
+
+    async def get_transcription_status(self):
+        """Get current transcription service status"""
+        if not self.whisper_available:
+            status = {
+                "available": False,
+                "reason": "whisper-live not installed"
+            }
+        else:
+            status = self.whisper.get_status()
+        
+        await self.send_message({
+            "type": "transcription_status",
+            "status": status
+        })
+
     async def handle_message(self, message_data: dict):
         """
         Route incoming WebSocket message to appropriate handler
@@ -353,6 +464,18 @@ class WebSocketHandler:
 
         elif message_type == "config_update":
             await self.handle_config_update(message_data.get("config", {}))
+
+        elif message_type == "start_server_transcription":
+            await self.handle_start_server_transcription()
+
+        elif message_type == "stop_server_transcription":
+            await self.handle_stop_server_transcription()
+
+        elif message_type == "audio_chunk":
+            await self.handle_audio_chunk(message_data.get("data", ""))
+
+        elif message_type == "get_transcription_status":
+            await self.get_transcription_status()
 
         else:
             log.warning(f"Unknown message type: {message_type}")

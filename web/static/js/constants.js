@@ -15,5 +15,15 @@ window.CLAUDE_CONSTANTS = {
     WAKE_WORD_RESTART_DELAY: 1000,
     SILENCE_TIMEOUT: 2000,
     RECOGNITION_RESTART_DELAY: 100,
-    AUDIO_INIT_VOLUME: 0.01
+    AUDIO_INIT_VOLUME: 0.01,
+    
+    // Server transcription configuration
+    SERVER_TRANSCRIPTION: {
+        ENABLED: true,                    // Enable server transcription by default
+        FALLBACK_TO_BROWSER: true,        // Fallback to browser STT if server unavailable
+        AUDIO_CHUNK_INTERVAL: 250,        // Send audio chunks every 250ms
+        PREFERRED_SAMPLE_RATE: 16000,     // 16kHz for Whisper
+        PREFERRED_CHANNELS: 1,            // Mono audio
+        MIME_TYPE: 'audio/webm;codecs=opus' // Audio format for MediaRecorder
+    }
 };

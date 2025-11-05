@@ -28,6 +28,9 @@ class ClaudeAssistant {
 
         // Setup event listeners
         this.setupEventListeners();
+        
+        // Check server transcription availability (will be set when WebSocket connects)
+        this.serverTranscriptionAvailable = false;
     }
 
     /**
@@ -130,6 +133,9 @@ class ClaudeAssistant {
             // Return to idle state
             applyState('idle');
             this.ui.setStatus(READY_MESSAGE);
+
+            // Check server transcription availability
+            this.checkServerTranscriptionAvailability();
 
             // Start wake word mode if checkbox is checked
             const wakeWordToggle = document.getElementById('wake-word-toggle');
@@ -284,6 +290,32 @@ class ClaudeAssistant {
                     applyState('processing');
                 }
             });
+        };
+
+        // Server transcription handlers
+        this.ws.onServerTranscriptionResult = (result) => {
+            console.log('Server transcription result received:', result);
+            this.audio.handleServerTranscriptionResult(result);
+        };
+
+        this.ws.onTranscriptionStatus = (status) => {
+            console.log('Server transcription status:', status);
+            this.serverTranscriptionAvailable = status.available;
+            this.audio.setServerTranscriptionMode(true, status.available);
+        };
+
+        this.ws.onServerTranscriptionStarted = (sessionId) => {
+            console.log('Server transcription started:', sessionId);
+        };
+
+        this.ws.onServerTranscriptionStopped = () => {
+            console.log('Server transcription stopped');
+        };
+
+        this.ws.onTranscriptionUnavailable = (fallback) => {
+            console.log('Server transcription unavailable, using fallback:', fallback);
+            this.serverTranscriptionAvailable = false;
+            this.audio.setServerTranscriptionMode(false, false);
         };
 
         // Connect
@@ -483,7 +515,7 @@ class ClaudeAssistant {
             this.wakeWord.stopListening();
         }
 
-        const success = this.audio.startListening(this.activationMode);
+        const success = this.audio.startListening(this.activationMode, this.ws);
         if (success) {
             this.isListening = true;
             applyState('listening');
@@ -506,7 +538,7 @@ class ClaudeAssistant {
     stopListening() {
         if (!this.isListening) return;
 
-        this.audio.stopListening();
+        this.audio.stopListening(this.ws);
         this.isListening = false;
 
         // Update mode button
@@ -611,6 +643,15 @@ class ClaudeAssistant {
 
         // Play sleep sound
         this.audio.playSound('sleep');
+    }
+
+    /**
+     * Check server transcription availability
+     */
+    checkServerTranscriptionAvailability() {
+        if (this.ws && this.ws.isConnected()) {
+            this.ws.getTranscriptionStatus();
+        }
     }
 
     /**

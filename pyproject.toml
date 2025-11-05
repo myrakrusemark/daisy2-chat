@@ -30,6 +30,10 @@ dependencies = [
     # TTS
     "piper-tts>=1.2.0",
     "onnxruntime>=1.16.0",
+
+    # Real-time Speech Recognition
+    "whisper-live>=0.4.0",
+    "faster-whisper>=0.10.0",
 ]
 
 [project.optional-dependencies]

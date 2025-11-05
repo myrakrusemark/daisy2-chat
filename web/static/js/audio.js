@@ -1,5 +1,10 @@
 // Import constants from global constants file
-const { SILENCE_TIMEOUT, RECOGNITION_RESTART_DELAY, AUDIO_INIT_VOLUME } = window.CLAUDE_CONSTANTS;
+const { 
+    SILENCE_TIMEOUT, 
+    RECOGNITION_RESTART_DELAY, 
+    AUDIO_INIT_VOLUME,
+    SERVER_TRANSCRIPTION 
+} = window.CLAUDE_CONSTANTS;
 
 class AudioManager {
     constructor() {
@@ -45,6 +50,13 @@ class AudioManager {
         this.onInterimTranscript = null;
         this.onError = null;
         this.onEnd = null;
+
+        // Server transcription state
+        this.useServerTranscription = SERVER_TRANSCRIPTION.ENABLED;
+        this.serverTranscriptionAvailable = false;
+        this.audioStreamingActive = false;
+        this.mediaRecorder = null;
+        this.audioChunks = [];
 
         this.setupRecognitionHandlers();
         this.setupAudioInitialization();
@@ -409,6 +421,174 @@ class AudioManager {
      */
     setSoundsEnabled(enabled) {
         this.soundsEnabled = enabled;
+    }
+
+    /**
+     * Enable server-side transcription mode
+     */
+    setServerTranscriptionMode(enabled, available = true) {
+        this.useServerTranscription = enabled && available;
+        this.serverTranscriptionAvailable = available;
+        console.log(`Server transcription mode: ${this.useServerTranscription ? 'enabled' : 'disabled'}`);
+    }
+
+    /**
+     * Start server-side audio streaming after wake word detection
+     */
+    async startServerAudioStreaming(websocket) {
+        if (!this.useServerTranscription || !websocket) {
+            console.log('Server transcription not available, using browser STT');
+            return false;
+        }
+
+        try {
+            // Get microphone access
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                audio: {
+                    sampleRate: SERVER_TRANSCRIPTION.PREFERRED_SAMPLE_RATE,
+                    channelCount: SERVER_TRANSCRIPTION.PREFERRED_CHANNELS,
+                    echoCancellation: true,
+                    noiseSuppression: true
+                } 
+            });
+
+            // Set up MediaRecorder for audio streaming
+            this.mediaRecorder = new MediaRecorder(stream, {
+                mimeType: SERVER_TRANSCRIPTION.MIME_TYPE
+            });
+
+            this.audioChunks = [];
+            this.audioStreamingActive = true;
+
+            // Handle audio data
+            this.mediaRecorder.ondataavailable = (event) => {
+                if (event.data.size > 0 && this.audioStreamingActive) {
+                    // Convert to base64 and send to server
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                        const audioData = reader.result.split(',')[1]; // Remove data URL prefix
+                        websocket.sendAudioChunk(audioData);
+                    };
+                    reader.readAsDataURL(event.data);
+                }
+            };
+
+            this.mediaRecorder.onstop = () => {
+                this.audioStreamingActive = false;
+                stream.getTracks().forEach(track => track.stop());
+                console.log('Server audio streaming stopped');
+            };
+
+            // Start recording and request server transcription
+            this.mediaRecorder.start(SERVER_TRANSCRIPTION.AUDIO_CHUNK_INTERVAL);
+            websocket.startServerTranscription();
+
+            console.log('Server audio streaming started');
+            return true;
+
+        } catch (error) {
+            console.error('Error starting server audio streaming:', error);
+            this.audioStreamingActive = false;
+            return false;
+        }
+    }
+
+    /**
+     * Stop server-side audio streaming
+     */
+    stopServerAudioStreaming(websocket) {
+        if (!this.audioStreamingActive) {
+            return;
+        }
+
+        this.audioStreamingActive = false;
+
+        if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
+            this.mediaRecorder.stop();
+        }
+
+        if (websocket) {
+            websocket.stopServerTranscription();
+        }
+
+        console.log('Server audio streaming stopped');
+    }
+
+    /**
+     * Handle server transcription result
+     */
+    handleServerTranscriptionResult(result) {
+        console.log('Server transcription result:', result);
+        
+        if (result.is_final && result.text.trim()) {
+            // Final result - treat as complete transcript
+            if (this.onTranscript) {
+                this.onTranscript(result.text.trim());
+            }
+        } else if (result.text.trim()) {
+            // Interim result - show in UI
+            if (this.onInterimTranscript) {
+                this.onInterimTranscript(result.text.trim());
+            }
+        }
+    }
+
+    /**
+     * Enhanced startListening that supports both browser and server transcription
+     */
+    startListening(mode = 'push-to-talk', websocket = null) {
+        // If server transcription is enabled and available, use that for wake-word mode
+        if (this.useServerTranscription && mode === 'wake-word' && websocket) {
+            return this.startServerAudioStreaming(websocket);
+        }
+
+        // Otherwise use browser STT
+        return this._startBrowserListening(mode);
+    }
+
+    /**
+     * Original browser-based listening (renamed)
+     */
+    _startBrowserListening(mode = 'push-to-talk') {
+        if (!this.recognition) {
+            console.error('Speech recognition not available');
+            return false;
+        }
+
+        // Store the current mode
+        this.currentMode = mode;
+
+        // Clear any existing silence timer
+        this.clearSilenceTimer();
+
+        // If already active, stop first
+        if (this.isRecognitionActive) {
+            this.recognition.stop();
+            // Wait a bit before restarting
+            setTimeout(() => {
+                this._attemptStart();
+            }, 100);
+            return true;
+        }
+
+        return this._attemptStart();
+    }
+
+    /**
+     * Enhanced stopListening that supports both modes
+     */
+    stopListening(websocket = null) {
+        // Stop server audio streaming if active
+        if (this.audioStreamingActive) {
+            this.stopServerAudioStreaming(websocket);
+            return;
+        }
+
+        // Stop browser STT
+        this.clearSilenceTimer();
+        if (this.recognition) {
+            this.recognition.stop();
+        }
     }
 
     /**
