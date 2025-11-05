@@ -49,9 +49,11 @@ data/conversations/*.yml
 data/conversations/*.yaml
 !data/conversations/.gitkeep
 
-sandbox/*
-!sandbox/.gitkeep
-!sandbox/README.md
+# Workspace git directory
+workspace/.git
+
+# MCP driving schedule script
+src/mcp/drive_schedule_mcp/
 
 # Logs
 *.log

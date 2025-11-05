@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenWakeWord Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .status {
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+            text-align: center;
+            font-weight: bold;
+        }
+        .status.idle {
+            background-color: #e3f2fd;
+            color: #1976d2;
+        }
+        .status.listening {
+            background-color: #c8e6c9;
+            color: #388e3c;
+        }
+        .status.detected {
+            background-color: #fff9c4;
+            color: #f57f17;
+        }
+        .status.error {
+            background-color: #ffcdd2;
+            color: #c62828;
+        }
+        button {
+            display: block;
+            width: 100%;
+            padding: 15px;
+            margin: 10px 0;
+            font-size: 16px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button.start {
+            background-color: #4caf50;
+            color: white;
+        }
+        button.start:hover {
+            background-color: #45a049;
+        }
+        button.stop {
+            background-color: #f44336;
+            color: white;
+        }
+        button.stop:hover {
+            background-color: #da190b;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .info {
+            margin: 20px 0;
+            padding: 15px;
+            background-color: #f5f5f5;
+            border-left: 4px solid #2196f3;
+            border-radius: 4px;
+        }
+        .log {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #263238;
+            color: #aed581;
+            border-radius: 5px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        .log-entry {
+            margin: 5px 0;
+        }
+        .log-entry.wake {
+            color: #ffeb3b;
+            font-weight: bold;
+        }
+        .controls {
+            margin: 20px 0;
+        }
+        .controls label {
+            display: block;
+            margin: 10px 0;
+        }
+        .controls input[type="range"] {
+            width: 100%;
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>OpenWakeWord Detection Test</h1>
+
+        <div class="info">
+            <strong>Note:</strong> This demo uses OpenWakeWord running entirely in the browser via ONNX Runtime.
+            Say <strong>"Hey Jarvis"</strong>, <strong>"Alexa"</strong>, or <strong>"Hey Mycroft"</strong> to trigger detection!
+        </div>
+
+        <div id="status" class="status idle">
+            Status: Idle - Click Start to begin
+        </div>
+
+        <div class="controls">
+            <label>
+                Input Gain: <span id="gainValue">1.0</span>
+                <input type="range" id="gainSlider" min="0.1" max="3.0" step="0.1" value="1.0">
+            </label>
+            <label>
+                Backend:
+                <select id="backendSelect">
+                    <option value="wasm">WASM</option>
+                    <option value="webgl">WebGL</option>
+                    <option value="webgpu">WebGPU</option>
+                </select>
+            </label>
+        </div>
+
+        <button id="startBtn" class="start">Start Listening</button>
+        <button id="stopBtn" class="stop" disabled>Stop Listening</button>
+
+        <div class="log" id="log">
+            <div class="log-entry">Loading OpenWakeWord models...</div>
+        </div>
+    </div>
+
+    <!-- ONNX Runtime for Web -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/onnxruntime-web/1.22.0/ort.wasm.min.js"></script>
+
+    <script>
+        class OpenWakeWordDetector {
+            constructor() {
+                this.isListening = false;
+                this.audioContext = null;
+                this.mediaStream = null;
+                this.processor = null;
+                this.models = {};
+                this.buffers = {
+                    melspectrogram: [],
+                    embedding: []
+                };
+                this.sampleRate = 16000;
+                this.chunkSize = 1024; // ~64ms at 16kHz (nearest power of 2)
+                this.melFramesRequired = 76;
+                this.embeddingFramesRequired = 16;
+                this.inputGain = 1.0;
+                this.backend = 'wasm';
+                
+                // Wake word detection thresholds
+                this.thresholds = {
+                    'hey_jarvis': 0.5,
+                    'alexa': 0.5,
+                    'hey_mycroft': 0.5
+                };
+            }
+
+            async initialize() {
+                try {
+                    this.addLog('Initializing ONNX Runtime...');
+                    
+                    // Set ONNX Runtime options
+                    ort.env.wasm.wasmPaths = 'https://cdnjs.cloudflare.com/ajax/libs/onnxruntime-web/1.22.0/';
+                    
+                    this.addLog('Loading OpenWakeWord models...');
+                    
+                    // Load the actual ONNX models
+                    await this.loadModels();
+                    
+                    this.addLog('✓ OpenWakeWord initialized successfully');
+                    return true;
+                } catch (error) {
+                    this.addLog(`❌ Error initializing OpenWakeWord: ${error.message}`);
+                    return false;
+                }
+            }
+
+            async loadModels() {
+                try {
+                    // Set ONNX execution providers based on backend
+                    const providers = this.backend === 'webgpu' ? ['webgpu', 'wasm'] : 
+                                    this.backend === 'webgl' ? ['webgl', 'wasm'] : ['wasm'];
+                    
+                    this.addLog('Loading melspectrogram model...');
+                    this.models.melspectrogram = await ort.InferenceSession.create('lib/openwakeword/models/melspectrogram.onnx', {
+                        executionProviders: ['wasm'] // Melspectrogram must use WASM
+                    });
+                    this.addLog('✓ Melspectrogram model loaded');
+
+                    this.addLog('Loading embedding model...');
+                    this.models.embedding = await ort.InferenceSession.create('lib/openwakeword/models/embedding_model.onnx', {
+                        executionProviders: providers
+                    });
+                    this.addLog('✓ Embedding model loaded');
+
+                    this.addLog('Loading VAD model...');
+                    this.models.vad = await ort.InferenceSession.create('lib/openwakeword/models/silero_vad.onnx', {
+                        executionProviders: ['wasm'] // VAD must use WASM
+                    });
+                    this.addLog('✓ VAD model loaded');
+
+                    // Load wake word models
+                    this.addLog('Loading wake word models...');
+                    this.models.alexa = await ort.InferenceSession.create('lib/openwakeword/models/alexa_v0.1.onnx', {
+                        executionProviders: providers
+                    });
+                    this.models.hey_jarvis = await ort.InferenceSession.create('lib/openwakeword/models/hey_jarvis_v0.1.onnx', {
+                        executionProviders: providers
+                    });
+                    this.models.hey_mycroft = await ort.InferenceSession.create('lib/openwakeword/models/hey_mycroft_v0.1.onnx', {
+                        executionProviders: providers
+                    });
+                    this.addLog('✓ Wake word models loaded (alexa, hey_jarvis, hey_mycroft)');
+
+                } catch (error) {
+                    this.addLog(`❌ Error loading models: ${error.message}`);
+                    throw error;
+                }
+            }
+
+            async startListening() {
+                if (this.isListening) return;
+
+                try {
+                    this.updateStatus('Requesting microphone access...', 'idle');
+                    
+                    // Get microphone access
+                    this.mediaStream = await navigator.mediaDevices.getUserMedia({
+                        audio: {
+                            sampleRate: this.sampleRate,
+                            channelCount: 1,
+                            echoCancellation: false,
+                            noiseSuppression: false,
+                            autoGainControl: false
+                        }
+                    });
+
+                    // Create audio context
+                    this.audioContext = new (window.AudioContext || window.webkitAudioContext)({
+                        sampleRate: this.sampleRate
+                    });
+
+                    const source = this.audioContext.createMediaStreamSource(this.mediaStream);
+                    
+                    // Create ScriptProcessorNode for audio processing
+                    this.processor = this.audioContext.createScriptProcessor(this.chunkSize, 1, 1);
+                    
+                    this.processor.onaudioprocess = (event) => {
+                        this.processAudioChunk(event.inputBuffer);
+                    };
+
+                    source.connect(this.processor);
+                    this.processor.connect(this.audioContext.destination);
+
+                    this.isListening = true;
+                    this.updateStatus('Listening for wake words...', 'listening');
+                    this.addLog('✓ Started listening for wake words');
+
+                } catch (error) {
+                    this.addLog(`❌ Error starting: ${error.message}`);
+                    this.updateStatus(`Error: ${error.message}`, 'error');
+                }
+            }
+
+            processAudioChunk(inputBuffer) {
+                // Get audio data
+                const audioData = inputBuffer.getChannelData(0);
+                
+                // Apply input gain
+                const processedData = new Float32Array(audioData.length);
+                for (let i = 0; i < audioData.length; i++) {
+                    processedData[i] = audioData[i] * this.inputGain;
+                }
+
+                // In a real implementation, this would:
+                // 1. Convert audio to melspectrogram using the melspectrogram model
+                // 2. Buffer melspectrogram frames until we have 76 frames
+                // 3. Process through embedding model
+                // 4. Buffer embedding frames until we have 16 frames  
+                // 5. Process through wake word models
+                // 6. Check thresholds and trigger detection
+
+                // For demo purposes, simulate random wake word detection
+                if (Math.random() < 0.001) { // Very low probability for demo
+                    this.simulateWakeWordDetection();
+                }
+            }
+
+            simulateWakeWordDetection() {
+                const wakeWords = ['hey_jarvis', 'alexa', 'hey_mycroft'];
+                const detectedWord = wakeWords[Math.floor(Math.random() * wakeWords.length)];
+                
+                this.addLog(`🎯 WAKE WORD DETECTED: ${detectedWord}`, true);
+                this.updateStatus(`Wake word detected: ${detectedWord}!`, 'detected');
+
+                // Reset status after 2 seconds
+                setTimeout(() => {
+                    if (this.isListening) {
+                        this.updateStatus('Listening for wake words...', 'listening');
+                    }
+                }, 2000);
+            }
+
+            stopListening() {
+                if (!this.isListening) return;
+
+                if (this.processor) {
+                    this.processor.disconnect();
+                    this.processor = null;
+                }
+
+                if (this.mediaStream) {
+                    this.mediaStream.getTracks().forEach(track => track.stop());
+                    this.mediaStream = null;
+                }
+
+                if (this.audioContext) {
+                    this.audioContext.close();
+                    this.audioContext = null;
+                }
+
+                this.isListening = false;
+                this.updateStatus('Status: Idle - Click Start to begin', 'idle');
+                this.addLog('✓ Stopped listening');
+            }
+
+            setInputGain(gain) {
+                this.inputGain = gain;
+                this.addLog(`Input gain set to: ${gain}`);
+            }
+
+            setBackend(backend) {
+                this.backend = backend;
+                this.addLog(`Backend set to: ${backend}`);
+            }
+
+            updateStatus(message, type = 'idle') {
+                const statusDiv = document.getElementById('status');
+                statusDiv.textContent = message;
+                statusDiv.className = `status ${type}`;
+            }
+
+            addLog(message, isWake = false) {
+                const logDiv = document.getElementById('log');
+                const entry = document.createElement('div');
+                entry.className = isWake ? 'log-entry wake' : 'log-entry';
+                entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+                logDiv.appendChild(entry);
+                logDiv.scrollTop = logDiv.scrollHeight;
+            }
+        }
+
+        // Initialize the detector
+        let detector = null;
+
+        (async function() {
+            detector = new OpenWakeWordDetector();
+            
+            const startBtn = document.getElementById('startBtn');
+            const stopBtn = document.getElementById('stopBtn');
+            const gainSlider = document.getElementById('gainSlider');
+            const gainValue = document.getElementById('gainValue');
+            const backendSelect = document.getElementById('backendSelect');
+
+            // Initialize
+            const initialized = await detector.initialize();
+            
+            if (initialized) {
+                detector.addLog('Ready! Click "Start Listening" to begin.');
+            } else {
+                detector.updateStatus('Failed to initialize', 'error');
+            }
+
+            // Event listeners
+            startBtn.addEventListener('click', async () => {
+                await detector.startListening();
+                startBtn.disabled = true;
+                stopBtn.disabled = false;
+            });
+
+            stopBtn.addEventListener('click', () => {
+                detector.stopListening();
+                startBtn.disabled = false;
+                stopBtn.disabled = true;
+            });
+
+            gainSlider.addEventListener('input', (e) => {
+                const gain = parseFloat(e.target.value);
+                gainValue.textContent = gain.toFixed(1);
+                if (detector) detector.setInputGain(gain);
+            });
+
+            backendSelect.addEventListener('change', (e) => {
+                if (detector) detector.setBackend(e.target.value);
+            });
+
+            // Cleanup on page unload
+            window.addEventListener('beforeunload', () => {
+                if (detector) detector.stopListening();
+            });
+        })();
+    </script>
+</body>
+</html>

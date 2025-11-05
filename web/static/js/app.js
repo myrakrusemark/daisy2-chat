@@ -147,7 +147,7 @@ class ClaudeAssistant {
             this.isListening = false;
             
             // Stop wake word if running
-            if (this.wakeWord && this.wakeWord.isListening) {
+            if (this.wakeWord && this.wakeWord.getIsListening()) {
                 this.wakeWord.stopListening();
             }
             
@@ -479,7 +479,7 @@ class ClaudeAssistant {
         if (this.isListening) return;
 
         // Temporarily pause wake word detection if it's running
-        if (this.wakeWord && this.wakeWord.isListening) {
+        if (this.wakeWord && this.wakeWord.getIsListening()) {
             this.wakeWord.stopListening();
         }
 
@@ -522,7 +522,7 @@ class ClaudeAssistant {
 
         // Resume wake word detection if wake word toggle is checked
         const wakeWordToggle = document.getElementById('wake-word-toggle');
-        if (wakeWordToggle && wakeWordToggle.checked && this.wakeWord && !this.wakeWord.isListening) {
+        if (wakeWordToggle && wakeWordToggle.checked && this.wakeWord && !this.wakeWord.getIsListening()) {
             setTimeout(() => {
                 this.wakeWord.startListening();
             }, WAKE_WORD_RESUME_DELAY);
@@ -664,6 +664,11 @@ class ClaudeAssistant {
             this.wakeWord.onReady = (data) => {
                 console.log('Wake word ready:', data);
                 this.ui.setStatus(`Listening for wake word: "${data.wakeWord}"`);
+            };
+
+            this.wakeWord.onStatusChange = (data) => {
+                console.log('Wake word status change:', data);
+                this.ui.setStatus(data.message);
             };
 
             await this.wakeWord.initialize(WAKE_WORD);
