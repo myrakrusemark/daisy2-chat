@@ -453,23 +453,37 @@ class AudioManager {
             });
 
             // Set up MediaRecorder for audio streaming
+            console.log('Setting up MediaRecorder with MIME type:', SERVER_TRANSCRIPTION.MIME_TYPE);
+            console.log('MediaRecorder.isTypeSupported:', MediaRecorder.isTypeSupported(SERVER_TRANSCRIPTION.MIME_TYPE));
+            
             this.mediaRecorder = new MediaRecorder(stream, {
                 mimeType: SERVER_TRANSCRIPTION.MIME_TYPE
             });
+            
+            console.log('MediaRecorder created successfully, state:', this.mediaRecorder.state);
 
             this.audioChunks = [];
             this.audioStreamingActive = true;
 
             // Handle audio data
             this.mediaRecorder.ondataavailable = (event) => {
+                console.log(`MediaRecorder data available: ${event.data.size} bytes, type: ${event.data.type}`);
+                
                 if (event.data.size > 0 && this.audioStreamingActive) {
+                    console.log('Converting audio data to base64 and sending to server');
                     // Convert to base64 and send to server
                     const reader = new FileReader();
                     reader.onload = () => {
                         const audioData = reader.result.split(',')[1]; // Remove data URL prefix
+                        console.log(`Sending audio chunk: ${audioData.length} base64 chars`);
                         websocket.sendAudioChunk(audioData);
                     };
+                    reader.onerror = (error) => {
+                        console.error('FileReader error:', error);
+                    };
                     reader.readAsDataURL(event.data);
+                } else {
+                    console.log(`Skipping audio data: size=${event.data.size}, active=${this.audioStreamingActive}`);
                 }
             };
 
@@ -479,8 +493,18 @@ class AudioManager {
                 console.log('Server audio streaming stopped');
             };
 
+            this.mediaRecorder.onerror = (event) => {
+                console.error('MediaRecorder error:', event.error);
+            };
+
+            this.mediaRecorder.onstart = () => {
+                console.log('MediaRecorder started');
+            };
+
             // Start recording and request server transcription
+            console.log('Starting MediaRecorder with interval:', SERVER_TRANSCRIPTION.AUDIO_CHUNK_INTERVAL);
             this.mediaRecorder.start(SERVER_TRANSCRIPTION.AUDIO_CHUNK_INTERVAL);
+            console.log('MediaRecorder started, state:', this.mediaRecorder.state);
             websocket.startServerTranscription();
 
             console.log('Server audio streaming started');

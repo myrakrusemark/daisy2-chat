@@ -6,13 +6,16 @@ import threading
 import time
 import wave
 import io
+import base64
+import tempfile
+import subprocess
 import numpy as np
 from typing import Callable, Optional, AsyncGenerator
 from dataclasses import dataclass
 
 try:
-    from whisper_live.client import TranscriptionClient
     from faster_whisper import WhisperModel
+    import numpy as np
     WHISPER_AVAILABLE = True
 except ImportError:
     WHISPER_AVAILABLE = False
@@ -41,7 +44,7 @@ class WhisperTranscriptionService:
             language: Language code for transcription
         """
         if not WHISPER_AVAILABLE:
-            raise ImportError("whisper-live and faster-whisper are required for server transcription")
+            raise ImportError("faster-whisper and numpy are required for server transcription")
         
         self.model_size = model_size
         self.language = language
@@ -133,28 +136,31 @@ class WhisperTranscriptionService:
         Process incoming audio chunk
         
         Args:
-            audio_data: Raw audio data (16-bit PCM, 16kHz, mono)
+            audio_data: WebM/Opus audio data from browser
             
         Returns:
             True if processed successfully
         """
         if not self.is_transcribing:
+            log.warning("Not transcribing, ignoring audio chunk")
             return False
             
         try:
-            # Add to buffer
+            log.info(f"Received audio chunk: {len(audio_data)} bytes")
+            
+            # Add to buffer for batch processing
             with self.buffer_lock:
                 self.audio_buffer.extend(audio_data)
                 
-                # Process when we have enough data (1 second worth)
-                bytes_per_second = self.sample_rate * 2  # 16-bit = 2 bytes per sample
-                if len(self.audio_buffer) >= bytes_per_second:
+                # Process when we have enough data (0.5 seconds worth of WebM data)
+                # WebM chunks are compressed, so we use a smaller threshold
+                if len(self.audio_buffer) >= 2000:  # ~0.5s of WebM audio
                     # Extract audio for processing
-                    audio_to_process = bytes(self.audio_buffer[:bytes_per_second])
-                    self.audio_buffer = self.audio_buffer[bytes_per_second:]
+                    audio_to_process = bytes(self.audio_buffer)
+                    self.audio_buffer.clear()  # Clear buffer for next batch
                     
-                    # Process audio in background thread to avoid blocking
-                    asyncio.create_task(self._process_audio_async(audio_to_process))
+                    # Process audio in background
+                    asyncio.create_task(self._process_webm_audio(audio_to_process))
             
             return True
             
@@ -162,11 +168,78 @@ class WhisperTranscriptionService:
             log.error(f"Error processing audio chunk: {e}")
             return False
 
-    async def _process_audio_async(self, audio_data: bytes):
+    async def _process_webm_audio(self, audio_data: bytes):
+        """Process WebM audio data using FFmpeg conversion"""
+        try:
+            log.info(f"Processing WebM audio: {len(audio_data)} bytes")
+            
+            # Convert WebM to numpy array for Whisper
+            audio_array = await self._convert_audio_to_wav(audio_data)
+            if audio_array is None:
+                log.warning("Failed to convert WebM audio")
+                return
+            
+            # Skip very short audio
+            if len(audio_array) < self.sample_rate * 0.1:  # Less than 100ms
+                log.debug("Skipping short audio segment")
+                return
+            
+            # Process with Whisper
+            await self._process_audio_async(audio_array)
+            
+        except Exception as e:
+            log.error(f"Error processing WebM audio: {e}")
+
+    async def _convert_audio_to_wav(self, audio_data: bytes) -> Optional[np.ndarray]:
+        """Convert WebM/Opus audio to numpy array for Whisper"""
+        try:
+            # Create temporary files
+            with tempfile.NamedTemporaryFile(suffix='.webm') as input_file, \
+                 tempfile.NamedTemporaryFile(suffix='.wav') as output_file:
+                
+                # Write input audio
+                input_file.write(audio_data)
+                input_file.flush()
+                
+                # Convert using ffmpeg
+                ffmpeg_cmd = [
+                    'ffmpeg', '-y', '-i', input_file.name,
+                    '-ar', str(self.sample_rate),  # 16kHz
+                    '-ac', '1',  # mono
+                    '-f', 'wav',
+                    output_file.name
+                ]
+                
+                # Run conversion in thread pool
+                loop = asyncio.get_event_loop()
+                result = await loop.run_in_executor(
+                    None, 
+                    lambda: subprocess.run(ffmpeg_cmd, capture_output=True, text=True)
+                )
+                
+                if result.returncode != 0:
+                    log.error(f"FFmpeg conversion failed: {result.stderr}")
+                    return None
+                
+                # Read converted audio
+                output_file.seek(0)
+                audio_bytes = output_file.read()
+                
+                # Convert to numpy array
+                audio_array = np.frombuffer(audio_bytes[44:], dtype=np.int16).astype(np.float32) / 32768.0
+                return audio_array
+                
+        except Exception as e:
+            log.error(f"Error converting audio: {e}")
+            return None
+
+    async def _process_audio_async(self, audio_array: np.ndarray):
         """Process audio data asynchronously using faster-whisper"""
         try:
-            # Convert bytes to numpy array
-            audio_array = np.frombuffer(audio_data, dtype=np.int16).astype(np.float32) / 32768.0
+            # Skip very short audio chunks
+            if len(audio_array) < self.sample_rate * 0.1:  # Less than 100ms
+                log.debug("Skipping short audio chunk")
+                return
             
             # Run transcription in thread pool to avoid blocking
             loop = asyncio.get_event_loop()
@@ -181,6 +254,8 @@ class WhisperTranscriptionService:
     def _transcribe_audio(self, audio_array: np.ndarray) -> Optional[TranscriptionResult]:
         """Transcribe audio using faster-whisper (blocking call)"""
         try:
+            log.debug(f"Transcribing audio: {len(audio_array)} samples, {len(audio_array)/self.sample_rate:.2f}s")
+            
             # Use faster-whisper for transcription
             segments, info = self.model.transcribe(
                 audio_array,
@@ -195,8 +270,10 @@ class WhisperTranscriptionService:
             text_parts = []
             for segment in segments:
                 text_parts.append(segment.text.strip())
+                log.debug(f"Segment: '{segment.text.strip()}'")
             
             combined_text = " ".join(text_parts).strip()
+            log.info(f"Transcription result: '{combined_text}'")
             
             if combined_text:
                 return TranscriptionResult(
@@ -205,6 +282,8 @@ class WhisperTranscriptionService:
                     confidence=info.language_probability if hasattr(info, 'language_probability') else 0.9,
                     language=info.language if hasattr(info, 'language') else self.language
                 )
+            else:
+                log.debug("No transcription result (empty or silence)")
                 
             return None
             

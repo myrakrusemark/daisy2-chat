@@ -32,8 +32,8 @@ dependencies = [
     "onnxruntime>=1.16.0",
 
     # Real-time Speech Recognition
-    "whisper-live>=0.4.0",
     "faster-whisper>=0.10.0",
+    "numpy>=1.21.0",
 ]
 
 [project.optional-dependencies]

@@ -51,7 +51,7 @@ class WebSocketHandler:
         except ImportError:
             self.whisper = None
             self.whisper_available = False
-            log.info("Whisper transcription not available - using browser STT only")
+            log.info("Whisper transcription not available (faster-whisper not installed) - using browser STT only")
 
     async def send_message(self, message_data: dict):
         """
@@ -364,13 +364,18 @@ class WebSocketHandler:
             # Set up transcription callback
             def on_transcription_result(result: TranscriptionResult):
                 # Send transcription result to browser asynchronously
-                asyncio.create_task(self.send_message({
-                    "type": "server_transcription_result",
-                    "text": result.text,
-                    "is_final": result.is_final,
-                    "confidence": result.confidence,
-                    "language": result.language
-                }))
+                # Use asyncio.create_task to avoid blocking the whisper processing
+                try:
+                    loop = asyncio.get_event_loop()
+                    loop.create_task(self.send_message({
+                        "type": "server_transcription_result",
+                        "text": result.text,
+                        "is_final": result.is_final,
+                        "confidence": result.confidence,
+                        "language": result.language
+                    }))
+                except Exception as e:
+                    log.error(f"Error sending transcription result: {e}")
 
             # Start transcription
             success = await self.whisper.start_transcription(
@@ -417,17 +422,26 @@ class WebSocketHandler:
             audio_data: Base64 encoded audio data
         """
         if not self.whisper_available or not self.whisper:
+            log.warning("Whisper not available, ignoring audio chunk")
             return
 
+        # Process audio chunks in background to avoid blocking WebSocket
+        asyncio.create_task(self._process_audio_chunk_async(audio_data))
+
+    async def _process_audio_chunk_async(self, audio_data: str):
+        """Process audio chunk asynchronously without blocking WebSocket"""
         try:
             # Decode base64 audio data
             audio_bytes = base64.b64decode(audio_data)
+            log.info(f"Processing audio chunk: {len(audio_bytes)} bytes")
             
             # Process audio chunk
             success = await self.whisper.process_audio_chunk(audio_bytes)
             
             if not success:
                 log.warning("Failed to process audio chunk")
+            else:
+                log.debug("Audio chunk processed successfully")
 
         except Exception as e:
             log.error(f"Error processing audio chunk: {e}")
