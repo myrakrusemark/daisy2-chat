@@ -14,6 +14,7 @@ window.CLAUDE_CONSTANTS = {
     WAKE_WORD_RESUME_DELAY: 500,
     WAKE_WORD_RESTART_DELAY: 1000,
     SILENCE_TIMEOUT: 2000,
+    WAKE_WORD_SILENCE_TIMEOUT: 2000, // Auto-send wake-word transcription after 2 seconds of silence
     RECOGNITION_RESTART_DELAY: 100,
     AUDIO_INIT_VOLUME: 0.01,
     

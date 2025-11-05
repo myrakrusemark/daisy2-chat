@@ -347,7 +347,7 @@ class WebSocketHandler:
             log.error(f"Error updating config: {e}")
             await self.send_error(f"Failed to update configuration: {str(e)}")
 
-    async def handle_start_server_transcription(self):
+    async def handle_start_server_transcription(self, streaming_mode: bool = True):
         """Start server-side transcription after wake word detection"""
         if not self.whisper_available:
             log.warning("Whisper transcription not available, falling back to browser STT")
@@ -377,10 +377,11 @@ class WebSocketHandler:
                 except Exception as e:
                     log.error(f"Error sending transcription result: {e}")
 
-            # Start transcription
+            # Start transcription with streaming mode for real-time results
             success = await self.whisper.start_transcription(
                 session_id=transcription_session_id,
-                callback=on_transcription_result
+                callback=on_transcription_result,
+                streaming_mode=streaming_mode
             )
 
             if success:
@@ -388,7 +389,7 @@ class WebSocketHandler:
                     "type": "server_transcription_started",
                     "session_id": transcription_session_id
                 })
-                log.info(f"Started server transcription session: {transcription_session_id}")
+                log.info(f"Started server transcription session: {transcription_session_id} (streaming={streaming_mode})")
                 return True
             else:
                 await self.send_error("Failed to start server transcription")

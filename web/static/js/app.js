@@ -295,7 +295,7 @@ class ClaudeAssistant {
         // Server transcription handlers
         this.ws.onServerTranscriptionResult = (result) => {
             console.log('Server transcription result received:', result);
-            this.audio.handleServerTranscriptionResult(result);
+            this.audio.handleServerTranscriptionResult(result, this.ws);
         };
 
         this.ws.onTranscriptionStatus = (status) => {
@@ -568,6 +568,9 @@ class ClaudeAssistant {
 
         // Stop listening
         this.stopListening();
+
+        // Clear any interim user message before adding final message
+        this.ui.clearInterimUserMessage();
 
         // Add user message to UI
         this.ui.addUserMessage(transcript);

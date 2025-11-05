@@ -1,6 +1,7 @@
 // Import constants from global constants file
 const { 
     SILENCE_TIMEOUT, 
+    WAKE_WORD_SILENCE_TIMEOUT,
     RECOGNITION_RESTART_DELAY, 
     AUDIO_INIT_VOLUME,
     SERVER_TRANSCRIPTION 
@@ -57,6 +58,13 @@ class AudioManager {
         this.audioStreamingActive = false;
         this.mediaRecorder = null;
         this.audioChunks = [];
+        
+        // Browser-side silence detection for wake-word mode
+        this.silenceTimer = null;
+        this.silenceTimeout = WAKE_WORD_SILENCE_TIMEOUT; // 2 seconds from constants
+        this.lastTranscriptionTime = null;
+        this.currentInterimTranscript = '';
+        this.lastTranscriptText = ''; // Track last text to detect actual changes
 
         this.setupRecognitionHandlers();
         this.setupAudioInitialization();
@@ -433,15 +441,18 @@ class AudioManager {
     }
 
     /**
-     * Start server-side audio streaming after wake word detection
+     * Start server-side audio streaming
      */
-    async startServerAudioStreaming(websocket) {
+    async startServerAudioStreaming(websocket, mode = 'wake-word') {
         if (!this.useServerTranscription || !websocket) {
             console.log('Server transcription not available, using browser STT');
             return false;
         }
 
         try {
+            this.currentServerMode = mode;
+            console.log(`Starting server audio streaming in ${mode} mode`);
+            
             // Get microphone access
             const stream = await navigator.mediaDevices.getUserMedia({ 
                 audio: {
@@ -482,13 +493,13 @@ class AudioManager {
             this.audioChunks = [];
             this.audioStreamingActive = true;
 
-            // Handle audio data
+            // Handle audio data - send chunks immediately for both modes for real-time transcription
             this.mediaRecorder.ondataavailable = (event) => {
-                console.log(`MediaRecorder data available: ${event.data.size} bytes, type: ${event.data.type}`);
+                console.log(`MediaRecorder data available: ${event.data.size} bytes, type: ${event.data.type}, mode: ${this.currentServerMode}`);
                 
                 if (event.data.size > 0 && this.audioStreamingActive) {
-                    console.log('Converting audio data to base64 and sending to server');
-                    // Convert to base64 and send to server
+                    // Send chunks immediately for both PTT and wake-word modes
+                    console.log('Converting audio data to base64 and sending to server for real-time transcription');
                     const reader = new FileReader();
                     reader.onload = () => {
                         const audioData = reader.result.split(',')[1]; // Remove data URL prefix
@@ -507,7 +518,21 @@ class AudioManager {
             this.mediaRecorder.onstop = () => {
                 this.audioStreamingActive = false;
                 stream.getTracks().forEach(track => track.stop());
-                console.log('Server audio streaming stopped');
+                console.log(`Server audio streaming stopped for ${this.currentServerMode} mode`);
+                
+                // For PTT mode, send transcript immediately when button released
+                // For wake-word mode, silence detection handles sending
+                if (this.currentServerMode === 'push-to-talk') {
+                    this._sendFinalTranscript('PTT button released');
+                    
+                    // Stop the transcription session
+                    setTimeout(() => {
+                        websocket.stopServerTranscription();
+                    }, 500);
+                }
+                
+                // Clear accumulated chunks
+                this.audioChunks = [];
             };
 
             this.mediaRecorder.onerror = (event) => {
@@ -518,11 +543,18 @@ class AudioManager {
                 console.log('MediaRecorder started');
             };
 
-            // Start recording and request server transcription
-            console.log('Starting MediaRecorder with interval:', SERVER_TRANSCRIPTION.AUDIO_CHUNK_INTERVAL);
-            this.mediaRecorder.start(SERVER_TRANSCRIPTION.AUDIO_CHUNK_INTERVAL);
+            // Start recording with 1-second intervals for real-time transcription
+            const chunkInterval = 1000; // Always 1 second for both modes
+            console.log('Starting MediaRecorder with 1-second intervals for real-time transcription');
+            this.mediaRecorder.start(chunkInterval);
             console.log('MediaRecorder started, state:', this.mediaRecorder.state);
+            console.log('Starting server transcription session...');
             websocket.startServerTranscription();
+            
+            // Start silence detection for wake-word mode
+            if (mode === 'wake-word') {
+                this._startSilenceDetection(websocket);
+            }
 
             console.log('Server audio streaming started');
             return true;
@@ -548,9 +580,11 @@ class AudioManager {
             this.mediaRecorder.stop();
         }
 
-        if (websocket) {
-            websocket.stopServerTranscription();
-        }
+        // Don't stop transcription session here for any mode
+        // Each mode handles stopping in its own way:
+        // - PTT: onstop handler stops after sending message  
+        // - Wake-word: silence timeout stops after sending message
+        // This prevents double-stopping the session
 
         console.log('Server audio streaming stopped');
     }
@@ -558,18 +592,36 @@ class AudioManager {
     /**
      * Handle server transcription result
      */
-    handleServerTranscriptionResult(result) {
+    handleServerTranscriptionResult(result, websocket) {
         console.log('Server transcription result:', result);
         
-        if (result.is_final && result.text.trim()) {
-            // Final result - treat as complete transcript
-            if (this.onTranscript) {
-                this.onTranscript(result.text.trim());
+        if (result.text.trim()) {
+            const newText = result.text.trim();
+            
+            // Only reset silence timer if we got NEW/DIFFERENT text
+            if (newText !== this.lastTranscriptText) {
+                console.log('New transcription text detected, starting/resetting silence timer');
+                this.lastTranscriptionTime = Date.now();
+                this.lastTranscriptText = newText;
+                this._resetSilenceTimer(websocket);
+            } else {
+                console.log('Same transcription text, not resetting timer');
             }
-        } else if (result.text.trim()) {
-            // Interim result - show in UI
-            if (this.onInterimTranscript) {
-                this.onInterimTranscript(result.text.trim());
+            
+            if (result.is_final) {
+                // Final result - treat as complete transcript
+                console.log('Calling onTranscript with server result:', newText);
+                this.currentInterimTranscript = ''; // Clear interim when we get final
+                this.lastTranscriptText = ''; // Reset for next session
+                if (this.onTranscript) {
+                    this.onTranscript(newText);
+                }
+            } else {
+                // Interim result - show in UI for real-time feedback and store for silence timeout
+                this.currentInterimTranscript = newText;
+                if (this.onInterimTranscript) {
+                    this.onInterimTranscript(newText);
+                }
             }
         }
     }
@@ -578,12 +630,14 @@ class AudioManager {
      * Enhanced startListening that supports both browser and server transcription
      */
     startListening(mode = 'push-to-talk', websocket = null) {
-        // If server transcription is enabled and available, use that for wake-word mode
-        if (this.useServerTranscription && mode === 'wake-word' && websocket) {
-            return this.startServerAudioStreaming(websocket);
+        // If server transcription is enabled and available, use that for any mode
+        if (this.useServerTranscription && this.serverTranscriptionAvailable && websocket) {
+            console.log(`Starting server transcription for mode: ${mode}`);
+            return this.startServerAudioStreaming(websocket, mode);
         }
 
         // Otherwise use browser STT
+        console.log(`Using browser STT for mode: ${mode}`);
         return this._startBrowserListening(mode);
     }
 
@@ -630,6 +684,9 @@ class AudioManager {
         if (this.recognition) {
             this.recognition.stop();
         }
+        
+        // Clear browser-side silence detection
+        this._clearSilenceTimer();
     }
 
     /**
@@ -669,6 +726,95 @@ class AudioManager {
                     userAgent.includes('edge') ? 'edge' :
                     userAgent.includes('safari') ? 'safari' : 'unknown'
         };
+    }
+
+    /**
+     * Start silence detection for wake-word mode
+     */
+    _startSilenceDetection(websocket) {
+        console.log(`Preparing browser-side silence detection (${this.silenceTimeout}ms) - will start on first transcription`);
+        this.lastTranscriptionTime = null; // Don't set time until first transcription
+        this.currentInterimTranscript = ''; // Clear any previous interim transcript
+        this.lastTranscriptText = ''; // Clear previous text tracker
+        // Don't start timer yet - wait for first transcription result
+    }
+
+    /**
+     * Reset the silence timer
+     */
+    _resetSilenceTimer(websocket) {
+        this._clearSilenceTimer();
+        
+        // Only use silence detection for wake-word mode
+        if (this.currentServerMode !== 'wake-word') {
+            return;
+        }
+        
+        this.silenceTimer = setTimeout(() => {
+            const timeSinceLastTranscription = Date.now() - (this.lastTranscriptionTime || Date.now());
+            console.log(`Silence timeout triggered. Time since last transcription: ${timeSinceLastTranscription}ms`);
+            
+            // Only trigger if we have actually received transcription results
+            if (this.audioStreamingActive && this.lastTranscriptionTime && timeSinceLastTranscription >= this.silenceTimeout) {
+                console.log('Auto-stopping wake-word transcription due to silence');
+                this.stopServerAudioStreaming(websocket);
+                
+                // Send the final transcript using the same method as PTT
+                this._sendFinalTranscript('Wake-word silence timeout');
+                
+                // Stop the transcription session after sending message (like PTT does)
+                setTimeout(() => {
+                    if (websocket) {
+                        websocket.stopServerTranscription();
+                    }
+                }, 500);
+            } else if (!this.lastTranscriptionTime) {
+                console.log('Silence timeout ignored - no transcription results received yet');
+                // Restart the timer to wait for transcription results
+                this._resetSilenceTimer(websocket);
+            }
+        }, this.silenceTimeout);
+        
+        console.log(`Silence timer reset: ${this.silenceTimeout}ms`);
+    }
+
+    /**
+     * Clear the silence timer
+     */
+    _clearSilenceTimer() {
+        if (this.silenceTimer) {
+            clearTimeout(this.silenceTimer);
+            this.silenceTimer = null;
+        }
+    }
+
+    /**
+     * Send the final transcript - shared by both PTT and wake-word modes
+     */
+    _sendFinalTranscript(reason) {
+        const finalTranscript = this.currentInterimTranscript || '';
+        console.log(`Sending final transcript (${reason}):`, finalTranscript);
+        console.log('Current state:', {
+            currentInterimTranscript: this.currentInterimTranscript,
+            hasOnTranscript: !!this.onTranscript,
+            transcriptLength: finalTranscript.length,
+            transcriptTrimmed: finalTranscript.trim()
+        });
+        
+        if (finalTranscript.trim() && this.onTranscript) {
+            // Set accumulated transcript for normal flow compatibility
+            this.accumulatedTranscript = finalTranscript.trim();
+            console.log('Calling this.onTranscript with result:', finalTranscript.trim());
+            this.onTranscript(finalTranscript.trim());
+        } else if (!finalTranscript.trim()) {
+            console.log('No final transcript to send - empty transcript');
+            // For wake-word mode, restart listening if no transcript
+            if (this.currentServerMode === 'wake-word' && this.onEnd) {
+                this.onEnd();
+            }
+        } else {
+            console.log('No onTranscript callback available');
+        }
     }
 }
 
