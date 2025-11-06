@@ -569,10 +569,7 @@ class ClaudeAssistant {
         // Stop listening
         this.stopListening();
 
-        // Clear any interim user message before adding final message
-        this.ui.clearInterimUserMessage();
-
-        // Add user message to UI
+        // Add user message to UI (this will handle interim message finalization)
         this.ui.addUserMessage(transcript);
 
         // Send to WebSocket

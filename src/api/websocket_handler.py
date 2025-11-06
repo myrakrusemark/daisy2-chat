@@ -376,12 +376,23 @@ class WebSocketHandler:
                     }))
                 except Exception as e:
                     log.error(f"Error sending transcription result: {e}")
+            
+            # Set up timeout callback for auto-submission
+            def on_timeout(accumulated_text: str):
+                # Auto-submit the accumulated transcription like a completed message
+                try:
+                    loop = asyncio.get_event_loop()
+                    log.info(f"Auto-submitting timed out transcription: '{accumulated_text[:50]}...'")
+                    loop.create_task(self.handle_user_message(accumulated_text))
+                except Exception as e:
+                    log.error(f"Error auto-submitting transcription: {e}")
 
             # Start transcription with streaming mode for real-time results
             success = await self.whisper.start_transcription(
                 session_id=transcription_session_id,
                 callback=on_transcription_result,
-                streaming_mode=streaming_mode
+                streaming_mode=streaming_mode,
+                timeout_callback=on_timeout
             )
 
             if success:

@@ -69,6 +69,12 @@ class WhisperTranscriptionService:
         self.silence_timer = None
         self.silence_timeout = 2.0  # 2 seconds of silence before auto-stop
         
+        # Session timeout for auto-submit
+        self.session_start_time = None
+        self.max_session_duration = 30.0  # 30 seconds max session
+        self.timeout_callback = None
+        self.accumulated_transcription = ""
+        
         # Initialize faster-whisper model
         self.model = None
         self._initialize_model()
@@ -93,7 +99,8 @@ class WhisperTranscriptionService:
         self, 
         session_id: str, 
         callback: Callable[[TranscriptionResult], None],
-        streaming_mode: bool = False
+        streaming_mode: bool = False,
+        timeout_callback: Optional[Callable[[str], None]] = None
     ) -> bool:
         """
         Start real-time transcription session
@@ -102,6 +109,7 @@ class WhisperTranscriptionService:
             session_id: Unique session identifier
             callback: Function to call with transcription results
             streaming_mode: If True, process chunks immediately for live transcription
+            timeout_callback: Function to call when session times out with accumulated text
             
         Returns:
             True if started successfully
@@ -113,6 +121,7 @@ class WhisperTranscriptionService:
         try:
             self.current_session_id = session_id
             self.transcription_callback = callback
+            self.timeout_callback = timeout_callback
             self.is_transcribing = True
             self.streaming_mode = streaming_mode
             
@@ -122,6 +131,10 @@ class WhisperTranscriptionService:
                 self.cumulative_audio.clear()
             self.last_transcription_time = None
             self._clear_silence_timer()
+            
+            # Initialize session timeout
+            self.session_start_time = time.time()
+            self.accumulated_transcription = ""
             
             log.info(f"Started transcription session: {session_id}")
             return True
@@ -139,6 +152,7 @@ class WhisperTranscriptionService:
         self.is_transcribing = False
         self.current_session_id = None
         self.transcription_callback = None
+        self.timeout_callback = None
         
         # Clear audio buffer and silence detection
         with self.buffer_lock:
@@ -146,6 +160,10 @@ class WhisperTranscriptionService:
             self.cumulative_audio.clear()
         self.last_transcription_time = None
         self._clear_silence_timer()
+        
+        # Clear session timeout
+        self.session_start_time = None
+        self.accumulated_transcription = ""
             
         log.info("Stopped transcription session")
 
@@ -161,6 +179,10 @@ class WhisperTranscriptionService:
         """
         if not self.is_transcribing:
             log.warning("Not transcribing, ignoring audio chunk")
+            return False
+            
+        # Check for session timeout
+        if self._check_session_timeout():
             return False
             
         try:
@@ -342,6 +364,12 @@ class WhisperTranscriptionService:
                 if result.text.strip():
                     self.last_transcription_time = time.time()
                     self._reset_silence_timer()
+                    
+                    # Accumulate transcription text for timeout handling
+                    if self.accumulated_transcription:
+                        self.accumulated_transcription += " " + result.text.strip()
+                    else:
+                        self.accumulated_transcription = result.text.strip()
                 
                 self.transcription_callback(result)
                 
@@ -426,6 +454,43 @@ class WhisperTranscriptionService:
         # Silence detection moved to browser for better control
         # Server will keep transcribing until browser explicitly stops
         pass
+
+    def _check_session_timeout(self) -> bool:
+        """
+        Check if the transcription session has exceeded the timeout duration
+        
+        Returns:
+            True if session timed out and was handled, False otherwise
+        """
+        if not self.session_start_time:
+            return False
+            
+        elapsed_time = time.time() - self.session_start_time
+        if elapsed_time >= self.max_session_duration:
+            log.info(f"Transcription session timed out after {elapsed_time:.1f} seconds")
+            
+            # Trigger timeout callback with accumulated text
+            if self.timeout_callback and self.accumulated_transcription.strip():
+                log.info(f"Auto-submitting accumulated transcription: '{self.accumulated_transcription[:50]}...'")
+                asyncio.create_task(self._handle_timeout())
+            else:
+                log.info("Session timed out but no text to submit")
+                asyncio.create_task(self.stop_transcription())
+            
+            return True
+        
+        return False
+
+    async def _handle_timeout(self):
+        """Handle session timeout by submitting accumulated text"""
+        try:
+            final_text = self.accumulated_transcription.strip()
+            if final_text and self.timeout_callback:
+                self.timeout_callback(final_text)
+            await self.stop_transcription()
+        except Exception as e:
+            log.error(f"Error handling timeout: {e}")
+            await self.stop_transcription()
 
 
 class AudioProcessor:

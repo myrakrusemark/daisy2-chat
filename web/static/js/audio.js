@@ -595,6 +595,12 @@ class AudioManager {
     handleServerTranscriptionResult(result, websocket) {
         console.log('Server transcription result:', result);
         
+        // Ignore results if audio streaming is no longer active
+        if (!this.audioStreamingActive) {
+            console.log('Ignoring late transcription result - audio streaming inactive');
+            return;
+        }
+        
         if (result.text.trim()) {
             const newText = result.text.trim();
             

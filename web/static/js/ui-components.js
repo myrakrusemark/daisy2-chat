@@ -8,6 +8,11 @@ class UIComponents {
         // Get DOM elements
         this.conversationEl = document.getElementById('conversation');
         this.scrollableEl = this.conversationEl.parentElement; // The actual scrollable container
+        console.log('UIComponents initialized:', {
+            conversationEl: this.conversationEl,
+            scrollableEl: this.scrollableEl,
+            scrollableClasses: this.scrollableEl?.className
+        });
         this.statusEl = document.getElementById('status-display');
         this.sessionIdEl = document.getElementById('session-id');
         this.connectionStatusEl = document.getElementById('connection-status');
@@ -286,9 +291,21 @@ class UIComponents {
     }
 
     scrollToBottom() {
-        // Scroll the actual scrollable container, not just the content
+        // Scroll to the very bottom of the scrollable container to show all padding
         if (this.scrollableEl) {
-            this.scrollableEl.scrollTop = this.scrollableEl.scrollHeight;
+            console.log('Scrolling to bottom...', {
+                scrollHeight: this.scrollableEl.scrollHeight,
+                scrollTop: this.scrollableEl.scrollTop,
+                clientHeight: this.scrollableEl.clientHeight
+            });
+            
+            // Scroll to the absolute bottom of the container (including all padding)
+            this.scrollableEl.scrollTo({
+                top: this.scrollableEl.scrollHeight,
+                behavior: 'smooth'
+            });
+        } else {
+            console.warn('No scrollable element found');
         }
     }
 

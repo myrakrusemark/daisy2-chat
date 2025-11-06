@@ -223,8 +223,8 @@ body.state-listening #btn-push-to-talk {
 }
 
 /* Add bottom padding to conversation area to prevent overlap with fixed controls */
-.drawer-content .flex-1 .flex-1 {
-    padding-bottom: 140px !important;
+#conversation {
+    padding-bottom: 180px !important;
 }
 
 /* Modal styling */
