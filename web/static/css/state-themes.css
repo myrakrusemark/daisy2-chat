@@ -209,6 +209,24 @@ body.state-listening #btn-push-to-talk {
     }
 }
 
+/* White pulse glow animation for VAD */
+@keyframes pulse-glow-white {
+    0%, 100% {
+        box-shadow: 0 0 15px rgba(255, 255, 255, 0.4);
+        opacity: 1;
+    }
+    50% {
+        box-shadow: 0 0 30px rgba(255, 255, 255, 0.8);
+        opacity: 0.95;
+    }
+}
+
+/* VAD active state - white glow when speech is detected */
+#btn-push-to-talk.vad-active {
+    animation: pulse-glow-white 1.5s infinite;
+    border-color: rgba(255, 255, 255, 0.6);
+}
+
 /* Controls area - fixed to bottom of viewport */
 .controls-area {
     background: transparent !important;

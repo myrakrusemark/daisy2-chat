@@ -40,6 +40,7 @@ class WakeWordManager {
         this.onError = null;
         this.onReady = null;
         this.onStatusChange = null;
+        this.onVadStateChanged = null;
 
         // Audio worklet processor code
         this.audioProcessorCode = `
@@ -280,13 +281,26 @@ class WakeWordManager {
                 if (vadFired) {
                     if (!this.isSpeechActive) {
                         this.isSpeechActive = true;
+                        // Emit VAD state change when speech starts
+                        if (this.onVadStateChanged) {
+                            this.onVadStateChanged({ isActive: true, vadFired: true });
+                        }
                     }
                     this.vadHangoverCounter = this.VAD_HANGOVER_FRAMES;
                 } else if (this.isSpeechActive) {
                     this.vadHangoverCounter--;
                     if (this.vadHangoverCounter <= 0) {
                         this.isSpeechActive = false;
+                        // Emit VAD state change when speech ends
+                        if (this.onVadStateChanged) {
+                            this.onVadStateChanged({ isActive: false, vadFired: false });
+                        }
                     }
+                }
+                
+                // Always emit current VAD fire state for real-time feedback
+                if (this.onVadStateChanged) {
+                    this.onVadStateChanged({ isActive: this.isSpeechActive, vadFired: vadFired });
                 }
                 
                 await this.runInference(chunk, this.isSpeechActive);
@@ -361,6 +375,16 @@ class WakeWordManager {
      */
     getIsListening() {
         return this.isListening;
+    }
+
+    /**
+     * Get current VAD state
+     */
+    getVadState() {
+        return {
+            isActive: this.isSpeechActive,
+            isListening: this.isListening
+        };
     }
 
     /**

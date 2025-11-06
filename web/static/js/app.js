@@ -505,6 +505,32 @@ class ClaudeAssistant {
     }
 
     /**
+     * Update push-to-talk button visual state based on VAD detection
+     */
+    updatePushToTalkButtonVadState(vadState) {
+        const pttBtn = document.getElementById('btn-push-to-talk');
+        if (!pttBtn) return;
+
+        console.log('VAD State Update:', {
+            vadFired: vadState.vadFired,
+            isActive: vadState.isActive,
+            isListening: this.isListening,
+            wakeWordListening: this.wakeWord?.getIsListening()
+        });
+
+        // Only apply VAD glow when wake word detection is active but we're not actively listening for commands
+        if (vadState.vadFired && !this.isListening) {
+            pttBtn.classList.add('vad-active');
+            console.log('🎤 VAD: Speech detected - adding white glow');
+        } else {
+            pttBtn.classList.remove('vad-active');
+            if (vadState.vadFired && this.isListening) {
+                console.log('🎤 VAD: Speech detected but already listening - no glow');
+            }
+        }
+    }
+
+    /**
      * Start listening for speech with state integration
      */
     startListening() {
@@ -701,6 +727,11 @@ class ClaudeAssistant {
                 console.error('Wake word error:', error);
                 this.ui.setStatus(`Wake word error: ${error}`, 'error');
             };
+            
+            // Set up VAD callback for visual feedback
+            this.wakeWord.onVadStateChanged = (vadState) => {
+                this.updatePushToTalkButtonVadState(vadState);
+            };
 
             this.wakeWord.onReady = (data) => {
                 console.log('Wake word ready:', data);
@@ -726,6 +757,12 @@ class ClaudeAssistant {
     stopWakeWord() {
         if (this.wakeWord) {
             this.wakeWord.stopListening();
+        }
+
+        // Clear VAD visual state
+        const pttBtn = document.getElementById('btn-push-to-talk');
+        if (pttBtn) {
+            pttBtn.classList.remove('vad-active');
         }
 
         this.activationMode = null;
