@@ -67,11 +67,11 @@ class WhisperTranscriptionService:
         # Silence detection for auto-stopping
         self.last_transcription_time = None
         self.silence_timer = None
-        self.silence_timeout = 2.0  # 2 seconds of silence before auto-stop
+        self.silence_timeout = 3.0  # 3 seconds of silence before auto-stop
         
         # Session timeout for auto-submit
         self.session_start_time = None
-        self.max_session_duration = 30.0  # 30 seconds max session
+        self.max_session_duration = 20.0  # 20 seconds max session
         self.timeout_callback = None
         self.accumulated_transcription = ""
         
@@ -131,6 +131,7 @@ class WhisperTranscriptionService:
                 self.cumulative_audio.clear()
             self.last_transcription_time = None
             self._clear_silence_timer()
+            # Don't start silence timer yet - wait for first transcription
             
             # Initialize session timeout
             self.session_start_time = time.time()
@@ -451,9 +452,26 @@ class WhisperTranscriptionService:
 
     def _reset_silence_timer(self):
         """Reset the silence timer for auto-stopping transcription"""
-        # Silence detection moved to browser for better control
-        # Server will keep transcribing until browser explicitly stops
-        pass
+        self._clear_silence_timer()
+        
+        if self.is_transcribing:
+            # Start a new timer that will trigger silence handling
+            self.silence_timer = threading.Timer(
+                self.silence_timeout, 
+                self._handle_silence
+            )
+            self.silence_timer.start()
+
+    def _handle_silence(self):
+        """Handle silence timeout by auto-stopping transcription"""
+        if self.is_transcribing and self.accumulated_transcription.strip():
+            log.info(f"Silence detected, auto-submitting: '{self.accumulated_transcription[:50]}...'")
+            if self.timeout_callback:
+                self.timeout_callback(self.accumulated_transcription.strip())
+            asyncio.create_task(self.stop_transcription())
+        elif self.is_transcribing:
+            log.info("Silence detected but no text to submit, stopping transcription")
+            asyncio.create_task(self.stop_transcription())
 
     def _check_session_timeout(self) -> bool:
         """
