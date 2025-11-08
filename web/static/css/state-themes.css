@@ -24,7 +24,7 @@
     --state-listening: oklch(0.35 0.15 150);      /* Green */
     --state-processing: oklch(0.35 0.20 300);     /* Vibrant violet */
     --state-speaking: oklch(0.30 0.12 220);       /* Blue */
-    --state-connecting: oklch(0.35 0.10 60);      /* Yellow-orange */
+    --state-connecting: oklch(0.45 0.25 85);      /* Bright vibrant yellow */
     --state-error: oklch(0.35 0.15 20);           /* Red */
 
     /* Bright state colors for background blend */
@@ -32,7 +32,7 @@
     --state-listening-bright: oklch(0.85 0.25 150); /* Bright green */
     --state-processing-bright: oklch(0.85 0.30 300); /* Bright violet */
     --state-speaking-bright: oklch(0.80 0.20 220);   /* Bright blue */
-    --state-connecting-bright: oklch(0.85 0.20 60);  /* Bright yellow-orange */
+    --state-connecting-bright: oklch(0.90 0.35 85);  /* Very bright vibrant yellow */
     --state-error-bright: oklch(0.80 0.25 20);       /* Bright red */
 
     /* Default to idle state */
