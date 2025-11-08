@@ -195,8 +195,9 @@ class ClaudeAssistant {
                 btn.classList.remove('btn-active');
             }
             
-            applyState('idle');
-            this.ui.setStatus('Connection lost - attempting to reconnect...', 'error');
+            // Set connecting state to disable audio input during reconnection
+            applyState('connecting');
+            this.ui.setStatus('Connection lost - attempting to reconnect...');
         };
 
         this.ws.onSessionInvalid = async () => {
@@ -206,10 +207,14 @@ class ClaudeAssistant {
         };
 
         this.ws.onReconnectAttempt = (attempt, maxAttempts, delay) => {
-            this.ui.setStatus(`Reconnecting... (${attempt}/${maxAttempts}) - retry in ${Math.round(delay/1000)}s`, 'warning');
+            // Set connecting state during reconnection attempts to disable audio input
+            applyState('connecting');
+            this.ui.setStatus(`Reconnecting... (${attempt}/${maxAttempts}) - retry in ${Math.round(delay/1000)}s`);
         };
 
         this.ws.onReconnectFailed = () => {
+            // Set error state when reconnection fails completely
+            applyState('error');
             this.ui.setStatus('Connection failed after multiple attempts. Refresh page to retry.', 'error');
         };
 
