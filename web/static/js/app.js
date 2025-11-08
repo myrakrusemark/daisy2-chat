@@ -101,6 +101,10 @@ class ClaudeAssistant {
 
     async initializeSession() {
         try {
+            // Set connecting state to disable audio input during initialization
+            applyState('connecting');
+            this.ui.setStatus('Creating session...');
+            
             // Create session via API
             const workingDir = document.getElementById('working-directory').value;
 
@@ -123,12 +127,14 @@ class ClaudeAssistant {
 
             console.log('Session created:', this.sessionId);
 
-            // Connect WebSocket
+            // Update status and connect WebSocket
+            this.ui.setStatus('Connecting to server...');
             this.connectWebSocket();
 
         } catch (error) {
             console.error('Error initializing session:', error);
             this.ui.setStatus('Failed to initialize session', 'error');
+            applyState('idle'); // Exit connecting state on error
         }
     }
 
@@ -368,7 +374,7 @@ class ClaudeAssistant {
 
     canStartListening() {
         const currentState = document.body.getAttribute('data-state');
-        return currentState !== 'processing';
+        return currentState !== 'processing' && currentState !== 'connecting';
     }
 
     setupEventListeners() {

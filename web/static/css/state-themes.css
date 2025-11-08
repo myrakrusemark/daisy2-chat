@@ -175,6 +175,26 @@ body.state-error {
     box-shadow: 0 4px 20px rgba(59, 130, 246, 0.4);
 }
 
+/* Push to Talk button disabled during connecting state */
+body.state-connecting #btn-push-to-talk {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background: linear-gradient(135deg,
+        rgba(100, 100, 100, 0.4) 0%,
+        rgba(80, 80, 80, 0.4) 100%) !important;
+    border-color: rgba(255, 255, 255, 0.3) !important;
+    box-shadow: none !important;
+    transform: none !important;
+}
+
+body.state-connecting #btn-push-to-talk:hover {
+    background: linear-gradient(135deg,
+        rgba(100, 100, 100, 0.4) 0%,
+        rgba(80, 80, 80, 0.4) 100%) !important;
+    transform: none !important;
+    box-shadow: none !important;
+}
+
 #btn-push-to-talk:hover {
     background: linear-gradient(135deg,
         rgba(59, 130, 246, 0.8) 0%,
