@@ -1,7 +1,17 @@
 import { applyState } from './state-themes.js';
 
 // Import constants from global constants file
-const { WAKE_WORD, WAKE_WORD_DISPLAY, READY_MESSAGE, WAKE_WORD_LISTENING_MESSAGE, WAKE_WORD_RESUME_DELAY, WAKE_WORD_RESTART_DELAY } = window.CLAUDE_CONSTANTS;
+const { 
+    WAKE_WORD, 
+    WAKE_WORD_DISPLAY, 
+    READY_MESSAGE, 
+    WAKE_WORD_LISTENING_MESSAGE, 
+    WAKE_WORD_RESUME_DELAY, 
+    WAKE_WORD_RESTART_DELAY,
+    STT_ENGINES,
+    STT_ENGINE_NAMES,
+    DEFAULT_STT_ENGINE 
+} = window.CLAUDE_CONSTANTS;
 
 class ClaudeAssistant {
     constructor() {
@@ -44,6 +54,16 @@ class ClaudeAssistant {
             if (toggle) {
                 toggle.checked = wakeWordEnabled === 'true';
             }
+        }
+        
+        // Load STT engine preference
+        const sttEngine = this.getCookie('sttEngine') || DEFAULT_STT_ENGINE;
+        this.audio.setPreferredEngine(sttEngine);
+        
+        // Update UI radio button
+        const radioButton = document.getElementById(`stt-${sttEngine}`);
+        if (radioButton) {
+            radioButton.checked = true;
         }
     }
 
@@ -136,6 +156,9 @@ class ClaudeAssistant {
 
             // Check server transcription availability
             this.checkServerTranscriptionAvailability();
+            
+            // Update STT engine status indicators
+            this.updateSTTEngineStatus();
 
             // Start wake word mode if checkbox is checked
             const wakeWordToggle = document.getElementById('wake-word-toggle');
@@ -302,6 +325,9 @@ class ClaudeAssistant {
             console.log('Server transcription status:', status);
             this.serverTranscriptionAvailable = status.available;
             this.audio.setServerTranscriptionMode(true, status.available);
+            
+            // Update STT engine status indicators
+            this.updateSTTEngineStatus();
         };
 
         this.ws.onServerTranscriptionStarted = (sessionId) => {
@@ -454,6 +480,29 @@ class ClaudeAssistant {
                 // Stop wake word mode
                 this.stopWakeWord();
             }
+        });
+
+        // STT Engine selection
+        document.querySelectorAll('input[name="stt-engine"]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                if (e.target.checked) {
+                    const selectedEngine = e.target.value;
+                    console.log(`STT engine changed to: ${selectedEngine}`);
+                    
+                    // Save setting to cookie
+                    this.setCookie('sttEngine', selectedEngine);
+                    
+                    // Update audio manager
+                    this.audio.setPreferredEngine(selectedEngine);
+                    
+                    // Update status indicators
+                    this.updateSTTEngineStatus();
+                    
+                    // Update status message
+                    const engineName = STT_ENGINE_NAMES[selectedEngine];
+                    this.ui.setStatus(`Speech engine switched to: ${engineName}`);
+                }
+            });
         });
 
         // Settings
@@ -862,6 +911,42 @@ class ClaudeAssistant {
             button.disabled = false;
             button.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg> Initialize Git Repository';
         }
+    }
+
+    /**
+     * Update STT engine status indicators
+     */
+    updateSTTEngineStatus() {
+        // Update Server Whisper status
+        const serverStatus = this.audio.getEngineStatus(STT_ENGINES.SERVER_WHISPER);
+        const serverStatusEl = document.getElementById('server-whisper-status');
+        if (serverStatusEl) {
+            serverStatusEl.textContent = serverStatus.text;
+            serverStatusEl.className = `badge badge-xs ${serverStatus.class}`;
+        }
+
+        // Update Browser Speech API status
+        const browserStatus = this.audio.getEngineStatus(STT_ENGINES.BROWSER_SPEECH_API);
+        const browserStatusEl = document.getElementById('browser-speech-api-status');
+        if (browserStatusEl) {
+            browserStatusEl.textContent = browserStatus.text;
+            browserStatusEl.className = `badge badge-xs ${browserStatus.class}`;
+        }
+
+        // Update radio button selection based on current engine
+        const currentEngine = this.audio.getCurrentEngine();
+        if (currentEngine) {
+            const radioButton = document.getElementById(`stt-${currentEngine}`);
+            if (radioButton) {
+                radioButton.checked = true;
+            }
+        }
+
+        console.log('STT Engine Status Updated:', {
+            current: this.audio.getCurrentEngine(),
+            preferred: this.audio.getPreferredEngine(),
+            availability: this.audio.getEngineAvailability()
+        });
     }
 }
 

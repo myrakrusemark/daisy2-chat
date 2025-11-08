@@ -26,5 +26,20 @@ window.CLAUDE_CONSTANTS = {
         PREFERRED_SAMPLE_RATE: 16000,     // 16kHz for Whisper
         PREFERRED_CHANNELS: 1,            // Mono audio
         MIME_TYPE: 'audio/wav'            // WAV format for simpler processing
-    }
+    },
+    
+    // STT Engine configuration
+    STT_ENGINES: {
+        SERVER_WHISPER: 'server-whisper',
+        BROWSER_SPEECH_API: 'browser-speech-api'
+    },
+    
+    // STT Engine display names
+    STT_ENGINE_NAMES: {
+        'server-whisper': 'Server Whisper',
+        'browser-speech-api': 'Browser Speech API'
+    },
+    
+    // Default STT engine preference
+    DEFAULT_STT_ENGINE: 'server-whisper'
 };

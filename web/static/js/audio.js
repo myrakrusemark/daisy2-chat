@@ -4,7 +4,10 @@ const {
     WAKE_WORD_SILENCE_TIMEOUT,
     RECOGNITION_RESTART_DELAY, 
     AUDIO_INIT_VOLUME,
-    SERVER_TRANSCRIPTION 
+    SERVER_TRANSCRIPTION,
+    STT_ENGINES,
+    STT_ENGINE_NAMES,
+    DEFAULT_STT_ENGINE 
 } = window.CLAUDE_CONSTANTS;
 
 class AudioManager {
@@ -59,6 +62,14 @@ class AudioManager {
         this.mediaRecorder = null;
         this.audioChunks = [];
         
+        // STT Engine management
+        this.preferredEngine = DEFAULT_STT_ENGINE;
+        this.currentEngine = null;
+        this.engineAvailability = {
+            [STT_ENGINES.SERVER_WHISPER]: false,
+            [STT_ENGINES.BROWSER_SPEECH_API]: false
+        };
+        
         // Browser-side silence detection for wake-word mode
         this.silenceTimer = null;
         this.silenceTimeout = WAKE_WORD_SILENCE_TIMEOUT; // 2 seconds from constants
@@ -68,6 +79,9 @@ class AudioManager {
 
         this.setupRecognitionHandlers();
         this.setupAudioInitialization();
+        
+        // Initialize engine availability
+        this.checkEngineAvailability();
     }
 
     setupAudioInitialization() {
@@ -437,6 +451,12 @@ class AudioManager {
     setServerTranscriptionMode(enabled, available = true) {
         this.useServerTranscription = enabled && available;
         this.serverTranscriptionAvailable = available;
+        
+        // Update engine availability and reconfigure if needed
+        this.engineAvailability[STT_ENGINES.SERVER_WHISPER] = available;
+        this.checkEngineAvailability();
+        this._updateEngineConfiguration();
+        
         console.log(`Server transcription mode: ${this.useServerTranscription ? 'enabled' : 'disabled'}`);
     }
 
@@ -821,6 +841,149 @@ class AudioManager {
         } else {
             console.log('No onTranscript callback available');
         }
+    }
+
+    /**
+     * STT Engine Management Methods
+     */
+
+    /**
+     * Set preferred STT engine
+     * @param {string} engine - Engine ID from STT_ENGINES
+     */
+    setPreferredEngine(engine) {
+        if (Object.values(STT_ENGINES).includes(engine)) {
+            this.preferredEngine = engine;
+            console.log(`Preferred STT engine set to: ${STT_ENGINE_NAMES[engine]}`);
+            this._updateEngineConfiguration();
+        } else {
+            console.error(`Invalid STT engine: ${engine}`);
+        }
+    }
+
+    /**
+     * Get current preferred STT engine
+     */
+    getPreferredEngine() {
+        return this.preferredEngine;
+    }
+
+    /**
+     * Get current active STT engine
+     */
+    getCurrentEngine() {
+        return this.currentEngine;
+    }
+
+    /**
+     * Check and update engine availability
+     */
+    checkEngineAvailability() {
+        // Check browser speech API availability
+        const browserSpeechAvailable = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+        this.engineAvailability[STT_ENGINES.BROWSER_SPEECH_API] = browserSpeechAvailable;
+        
+        // Server transcription availability is set via setServerTranscriptionMode
+        this.engineAvailability[STT_ENGINES.SERVER_WHISPER] = this.serverTranscriptionAvailable;
+        
+        console.log('Engine availability:', this.engineAvailability);
+        return this.engineAvailability;
+    }
+
+    /**
+     * Get engine availability status
+     */
+    getEngineAvailability() {
+        return { ...this.engineAvailability };
+    }
+
+    /**
+     * Get engine status for UI display
+     * @param {string} engine - Engine ID
+     */
+    getEngineStatus(engine) {
+        const available = this.engineAvailability[engine];
+        const isActive = this.currentEngine === engine;
+        
+        if (isActive) {
+            return { status: 'active', text: 'Active', class: 'badge-success' };
+        } else if (available) {
+            return { status: 'available', text: 'Available', class: 'badge-info' };
+        } else {
+            return { status: 'unavailable', text: 'Unavailable', class: 'badge-error' };
+        }
+    }
+
+    /**
+     * Force engine selection (for manual override)
+     * @param {string} engine - Engine ID to use
+     */
+    forceEngine(engine) {
+        if (!this.engineAvailability[engine]) {
+            console.warn(`Cannot force unavailable engine: ${STT_ENGINE_NAMES[engine]}`);
+            return false;
+        }
+        
+        this.preferredEngine = engine;
+        this._updateEngineConfiguration();
+        return true;
+    }
+
+    /**
+     * Update engine configuration based on preference and availability
+     * @private
+     */
+    _updateEngineConfiguration() {
+        const preferred = this.preferredEngine;
+        
+        // Check if preferred engine is available
+        if (this.engineAvailability[preferred]) {
+            this.currentEngine = preferred;
+            
+            // Configure based on selected engine
+            if (preferred === STT_ENGINES.SERVER_WHISPER) {
+                this.useServerTranscription = true;
+            } else if (preferred === STT_ENGINES.BROWSER_SPEECH_API) {
+                this.useServerTranscription = false;
+            }
+            
+            console.log(`Using STT engine: ${STT_ENGINE_NAMES[preferred]}`);
+        } else {
+            // Fallback to any available engine
+            const fallbackEngine = this._selectFallbackEngine();
+            if (fallbackEngine) {
+                this.currentEngine = fallbackEngine;
+                
+                if (fallbackEngine === STT_ENGINES.SERVER_WHISPER) {
+                    this.useServerTranscription = true;
+                } else if (fallbackEngine === STT_ENGINES.BROWSER_SPEECH_API) {
+                    this.useServerTranscription = false;
+                }
+                
+                console.log(`Preferred engine unavailable, using fallback: ${STT_ENGINE_NAMES[fallbackEngine]}`);
+            } else {
+                console.error('No STT engines available');
+                this.currentEngine = null;
+            }
+        }
+    }
+
+    /**
+     * Select best available fallback engine
+     * @private
+     */
+    _selectFallbackEngine() {
+        // Prefer server transcription if available
+        if (this.engineAvailability[STT_ENGINES.SERVER_WHISPER]) {
+            return STT_ENGINES.SERVER_WHISPER;
+        }
+        
+        // Fall back to browser speech API
+        if (this.engineAvailability[STT_ENGINES.BROWSER_SPEECH_API]) {
+            return STT_ENGINES.BROWSER_SPEECH_API;
+        }
+        
+        return null;
     }
 }
 
