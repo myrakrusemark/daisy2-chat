@@ -32,11 +32,12 @@ class AudioManager {
         this.silenceTimeout = SILENCE_TIMEOUT;
 
         // Audio playback for streamed TTS
-        this.audioContext = null;
+        this.audioContext = null;  // Only used for future Web Audio features, not TTS
         this.audioChunks = [];
         this.isPlaying = false;
         this.currentAudio = null;  // Track current audio element for stopping
         this.lastAudioBlob = null;  // Save last audio blob for replay
+        this.audioGestureInitialized = false;  // Track if user gesture has initialized audio
 
         // Sound effects
         this.soundsEnabled = true;
@@ -88,6 +89,8 @@ class AudioManager {
         const initAudio = () => {
             if (this.audioInitialized) return;
 
+            console.log('Initializing audio with user gesture for proper Android/Samsung routing');
+
             // Play and immediately pause all sounds to unlock audio
             Object.values(this.sounds).forEach(sound => {
                 sound.volume = 0.01;
@@ -100,7 +103,25 @@ class AudioManager {
                 });
             });
 
+            // Initialize AudioContext if needed for future features (with proper routing hints)
+            if (!this.audioContext) {
+                try {
+                    this.audioContext = new (window.AudioContext || window.webkitAudioContext)({
+                        latencyHint: 'playback'  // Force Android to use media audio path
+                    });
+                    
+                    // Ensure context is resumed (critical for Samsung devices)
+                    if (this.audioContext.state === 'suspended') {
+                        this.audioContext.resume();
+                    }
+                } catch (error) {
+                    console.warn('AudioContext initialization failed:', error);
+                }
+            }
+
             this.audioInitialized = true;
+            this.audioGestureInitialized = true;
+            console.log('Audio initialization complete - should route to Bluetooth on Android');
 
             // Remove listeners after initialization
             document.removeEventListener('click', initAudio);
@@ -278,10 +299,9 @@ class AudioManager {
         this.audioChunks = [];
         this.isPlaying = false;
 
-        // Initialize audio context if needed
-        if (!this.audioContext) {
-            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        }
+        // Note: Removed AudioContext initialization here as TTS playback uses <audio> element
+        // This prevents Samsung Android audio routing issues where AudioContext can interfere
+        // with proper A2DP Bluetooth routing
     }
 
     addTTSChunk(audioData) {
@@ -291,6 +311,7 @@ class AudioManager {
 
     /**
      * Play the accumulated audio chunks
+     * Optimized for Samsung Android Bluetooth A2DP routing
      */
     async playTTSStream(onEnd = null) {
         console.log(`Playing TTS stream (${this.audioChunks.length} chunks)`);
@@ -299,6 +320,11 @@ class AudioManager {
             console.warn('No audio chunks to play');
             if (onEnd) onEnd();
             return;
+        }
+
+        // Ensure audio has been initialized with user gesture (critical for Android)
+        if (!this.audioGestureInitialized) {
+            console.warn('Audio not initialized with user gesture - this may cause routing issues on Android');
         }
 
         try {
@@ -312,16 +338,36 @@ class AudioManager {
                 bytes[i] = binaryString.charCodeAt(i);
             }
 
-            // Create audio element and play
+            // Create audio element and play (using <audio> ensures proper A2DP routing on Samsung)
             const blob = new Blob([bytes], { type: 'audio/wav' });
             this.lastAudioBlob = blob;  // Save for replay
             const audioUrl = URL.createObjectURL(blob);
-            const audio = new Audio(audioUrl);
+            
+            // Create audio with explicit media classification for Samsung routing
+            const audio = new Audio();
+            audio.src = audioUrl;  // Set src after creation for better Samsung compatibility
             this.currentAudio = audio;  // Track for stopping
+
+            // Samsung Android specific fixes for Bluetooth A2DP routing
+            audio.setAttribute('playsinline', 'true');  // Prevent fullscreen on mobile
+            audio.preload = 'auto';  // Ensure browser treats as media
+            audio.controls = false;  // Disable controls but keep media classification
+            audio.muted = false;  // Explicitly not muted
+            audio.volume = 1.0;  // Full volume
+            
+            // Force the audio element into the DOM temporarily (Samsung routing fix)
+            audio.style.display = 'none';
+            document.body.appendChild(audio);
+            
+            console.log('Starting TTS playback via DOM-attached <audio> element for Samsung Bluetooth routing');
 
             audio.onended = () => {
                 console.log('TTS playback finished');
                 URL.revokeObjectURL(audioUrl);
+                // Remove from DOM after playback
+                if (audio.parentNode) {
+                    audio.parentNode.removeChild(audio);
+                }
                 this.isPlaying = false;
                 this.currentAudio = null;
                 if (onEnd) onEnd();
@@ -330,12 +376,20 @@ class AudioManager {
             audio.onerror = (e) => {
                 console.error('Audio playback error:', e);
                 URL.revokeObjectURL(audioUrl);
+                // Remove from DOM on error
+                if (audio.parentNode) {
+                    audio.parentNode.removeChild(audio);
+                }
                 this.isPlaying = false;
                 this.currentAudio = null;
                 if (onEnd) onEnd();
             };
 
             this.isPlaying = true;
+            
+            // Additional Samsung fix: Force a small delay to let DOM attachment complete
+            await new Promise(resolve => setTimeout(resolve, 10));
+            
             await audio.play();
 
         } catch (error) {
@@ -347,6 +401,7 @@ class AudioManager {
 
     /**
      * Replay the last TTS audio
+     * Optimized for Samsung Android Bluetooth A2DP routing
      */
     async replayLastTTS() {
         if (!this.lastAudioBlob) {
@@ -361,12 +416,32 @@ class AudioManager {
             }
 
             const audioUrl = URL.createObjectURL(this.lastAudioBlob);
-            const audio = new Audio(audioUrl);
+            
+            // Create audio with explicit media classification for Samsung routing
+            const audio = new Audio();
+            audio.src = audioUrl;  // Set src after creation for better Samsung compatibility
             this.currentAudio = audio;
+
+            // Samsung Android specific fixes for Bluetooth A2DP routing
+            audio.setAttribute('playsinline', 'true');
+            audio.preload = 'auto';
+            audio.controls = false;
+            audio.muted = false;
+            audio.volume = 1.0;
+            
+            // Force the audio element into the DOM temporarily (Samsung routing fix)
+            audio.style.display = 'none';
+            document.body.appendChild(audio);
+            
+            console.log('Replaying TTS via DOM-attached <audio> element for Samsung Bluetooth routing');
 
             audio.onended = () => {
                 console.log('TTS replay finished');
                 URL.revokeObjectURL(audioUrl);
+                // Remove from DOM after playback
+                if (audio.parentNode) {
+                    audio.parentNode.removeChild(audio);
+                }
                 this.isPlaying = false;
                 this.currentAudio = null;
             };
@@ -374,11 +449,19 @@ class AudioManager {
             audio.onerror = (e) => {
                 console.error('Audio replay error:', e);
                 URL.revokeObjectURL(audioUrl);
+                // Remove from DOM on error
+                if (audio.parentNode) {
+                    audio.parentNode.removeChild(audio);
+                }
                 this.isPlaying = false;
                 this.currentAudio = null;
             };
 
             this.isPlaying = true;
+            
+            // Additional Samsung fix: Force a small delay to let DOM attachment complete
+            await new Promise(resolve => setTimeout(resolve, 10));
+            
             await audio.play();
         } catch (error) {
             console.error('Error replaying TTS:', error);
@@ -416,6 +499,12 @@ class AudioManager {
         if (this.currentAudio) {
             this.currentAudio.pause();
             this.currentAudio.currentTime = 0;
+            
+            // Remove from DOM if it's attached (Samsung fix cleanup)
+            if (this.currentAudio.parentNode) {
+                this.currentAudio.parentNode.removeChild(this.currentAudio);
+            }
+            
             this.currentAudio = null;
         }
 

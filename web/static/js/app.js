@@ -41,6 +41,9 @@ class ClaudeAssistant {
         
         // Check server transcription availability (will be set when WebSocket connects)
         this.serverTranscriptionAvailable = false;
+        
+        // Track if wake word was paused for processing (to prevent Bluetooth interference)
+        this.wakeWordWasPausedForProcessing = false;
     }
 
     /**
@@ -266,6 +269,9 @@ class ClaudeAssistant {
             if (status === 'thinking') {
                 this.ui.setStatus('Claude is thinking...', 'processing');
                 this.isProcessing = true;
+                
+                // Pause wake word detection to prevent microphone interference with Bluetooth audio
+                this.pauseWakeWordForProcessing();
             } else if (status === 'complete') {
                 this.ui.setStatus('Response complete');
             }
@@ -275,6 +281,9 @@ class ClaudeAssistant {
             console.error('WebSocket error:', errorMessage);
             this.ui.setStatus(`Error: ${errorMessage}`, 'error');
             this.isProcessing = false;
+            
+            // Resume wake word detection on error
+            this.resumeWakeWordAfterProcessing();
         };
 
         // TTS streaming callbacks
@@ -282,9 +291,13 @@ class ClaudeAssistant {
         this.speakingToolSummary = false;
 
         this.ws.onTTSStart = (text) => {
-            console.log('TTS stream starting - exiting thinking mode');
+            console.log('TTS stream starting - exiting thinking mode, ensuring wake word paused for Bluetooth audio');
             // Exit thinking mode and enter speaking mode
             applyState('speaking');
+            
+            // Ensure wake word is paused during TTS to prevent microphone interference
+            this.pauseWakeWordForProcessing();
+            
             this.audio.startTTSStream();
         };
 
@@ -306,11 +319,16 @@ class ClaudeAssistant {
 
                     // Play sleep sound to indicate returning to idle state
                     this.audio.playSound('sleep');
+                    
+                    // Resume wake word detection now that TTS is complete
+                    this.resumeWakeWordAfterProcessing();
                 } else {
                     // Reset flag for next TTS and return to processing state
                     // (Claude is still working on the full response)
                     this.speakingToolSummary = false;
                     applyState('processing');
+                    
+                    // Keep wake word paused since we're still processing
                 }
             });
         };
@@ -378,13 +396,9 @@ class ClaudeAssistant {
             if (this.activationMode === 'wake-word') {
                 this.stopListening();
 
-                // Restart wake word listening after command completes
-                if (this.wakeWord) {
-                    setTimeout(() => {
-                        this.wakeWord.startListening();
-                        this.ui.setStatus(WAKE_WORD_LISTENING_MESSAGE());
-                    }, WAKE_WORD_RESTART_DELAY);
-                }
+                // DON'T restart wake word immediately - let the processing pause/resume logic handle it
+                // This prevents microphone interference with Bluetooth audio during TTS playback
+                console.log('Speech recognition ended - wake word will be resumed after processing is complete');
             }
         };
 
@@ -560,12 +574,7 @@ class ClaudeAssistant {
         const pttBtn = document.getElementById('btn-push-to-talk');
         if (!pttBtn) return;
 
-        console.log('VAD State Update:', {
-            vadFired: vadState.vadFired,
-            isActive: vadState.isActive,
-            isListening: this.isListening,
-            wakeWordListening: this.wakeWord?.getIsListening()
-        });
+        // VAD State Update logging disabled for cleaner console output
 
         // Only apply VAD glow when wake word detection is active but we're not actively listening for commands
         if (vadState.vadFired && !this.isListening) {
@@ -715,6 +724,9 @@ class ClaudeAssistant {
             applyState('idle');
             this.ui.setStatus(READY_MESSAGE);
         }
+        
+        // Resume wake word if it was paused for processing
+        this.resumeWakeWordAfterProcessing();
 
         // Play sleep sound
         this.audio.playSound('sleep');
@@ -947,6 +959,47 @@ class ClaudeAssistant {
             preferred: this.audio.getPreferredEngine(),
             availability: this.audio.getEngineAvailability()
         });
+    }
+
+    /**
+     * Pause wake word detection during processing to prevent microphone interference with Bluetooth audio
+     */
+    pauseWakeWordForProcessing() {
+        // If wake word mode is active, mark it as paused for processing
+        const wakeWordToggle = document.getElementById('wake-word-toggle');
+        if (wakeWordToggle && wakeWordToggle.checked) {
+            console.log('Marking wake word as paused for processing to prevent Bluetooth audio interference');
+            
+            // Stop if currently listening
+            if (this.wakeWord && this.wakeWord.getIsListening()) {
+                this.wakeWord.stopListening();
+            }
+            
+            this.wakeWordWasPausedForProcessing = true;
+        }
+    }
+
+    /**
+     * Resume wake word detection after processing is complete
+     */
+    resumeWakeWordAfterProcessing() {
+        // Only resume if wake word was actually paused for processing and wake word mode is still enabled
+        const wakeWordToggle = document.getElementById('wake-word-toggle');
+        if (this.wakeWordWasPausedForProcessing && 
+            wakeWordToggle && 
+            wakeWordToggle.checked && 
+            this.wakeWord && 
+            !this.wakeWord.getIsListening()) {
+            
+            console.log('Resuming wake word detection after processing complete');
+            setTimeout(() => {
+                if (this.wakeWord) {
+                    this.wakeWord.startListening();
+                    this.ui.setStatus(WAKE_WORD_LISTENING_MESSAGE());
+                }
+                this.wakeWordWasPausedForProcessing = false;
+            }, WAKE_WORD_RESUME_DELAY);
+        }
     }
 }
 
