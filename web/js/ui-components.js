@@ -326,6 +326,9 @@ class UIComponents {
         } else if (status === 'connecting') {
             this.connectionStatusEl.className = 'w-3 h-3 rounded-full bg-warning';
             applyState('connecting');
+        } else if (status === 'reconnecting') {
+            this.connectionStatusEl.className = 'w-3 h-3 rounded-full bg-warning animate-pulse';
+            applyState('connecting');
         } else if (status === 'disconnected') {
             this.connectionStatusEl.className = 'w-3 h-3 rounded-full bg-error';
             applyState('error');

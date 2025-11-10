@@ -253,6 +253,48 @@ class CassistantApp {
             applyState('connecting');
             this.setStatus('Disconnected - Reconnecting...');
         };
+        
+        // Enhanced connection state management
+        this.ws.onConnectionStateChange = (newState, previousState) => {
+            console.log(`WebSocket state: ${previousState} -> ${newState}`);
+            
+            switch (newState) {
+                case 'connecting':
+                    applyState('connecting');
+                    this.setStatus('Connecting to server...');
+                    break;
+                    
+                case 'connected':
+                    applyState('idle');
+                    this.setStatus('Ready to assist');
+                    
+                    // Show queued message count if any
+                    const queuedCount = this.ws.getQueuedMessageCount();
+                    if (queuedCount > 0) {
+                        this.setStatus(`Connected - processing ${queuedCount} queued messages`);
+                    }
+                    break;
+                    
+                case 'reconnecting':
+                    applyState('connecting');
+                    this.setStatus('Connection lost - reconnecting...');
+                    break;
+                    
+                case 'disconnected':
+                    applyState('error');
+                    this.setStatus('Disconnected from server');
+                    break;
+            }
+        };
+        
+        // Enhanced reconnection feedback
+        this.ws.onReconnectAttempt = (attempt, maxAttempts, delay) => {
+            this.setStatus(`Reconnecting... (${attempt}/${maxAttempts}) - next attempt in ${Math.round(delay/1000)}s`);
+        };
+        
+        this.ws.onReconnectFailed = () => {
+            this.setStatus('Failed to reconnect - please refresh the page');
+        };
 
         this.ws.onSessionInfo = (info) => {
             console.log('Session info:', info);
@@ -350,10 +392,22 @@ class CassistantApp {
             // Add final message
             this.addMessage('user', transcript);
 
-            // Send to server
+            // Send to server with enhanced connection handling
             this.isProcessing = true;
-            applyState('processing', true);
-            this.ws.sendUserMessage(transcript);
+            const connectionState = this.ws.getConnectionState();
+            
+            if (connectionState === 'connected') {
+                applyState('processing', true);
+                this.ws.sendUserMessage(transcript);
+            } else if (connectionState === 'connecting' || connectionState === 'reconnecting') {
+                applyState('connecting');
+                this.setStatus('Connecting to server, message queued...');
+                this.ws.sendUserMessage(transcript); // Will be queued automatically
+            } else {
+                applyState('connecting');
+                this.setStatus('Reconnecting to server...');
+                this.ws.sendUserMessage(transcript); // Will trigger reconnection and queue message
+            }
 
             // Clear transcript for next capture
             this.currentTranscript = '';

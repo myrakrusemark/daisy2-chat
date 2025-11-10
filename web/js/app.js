@@ -105,6 +105,48 @@ class ClaudeAssistant {
             this.ui.setConnectionStatus('disconnected');
             this.ui.setStatus('Disconnected - attempting to reconnect...', 'error');
         };
+        
+        // Enhanced connection state management
+        this.ws.onConnectionStateChange = (newState, previousState) => {
+            console.log(`WebSocket state: ${previousState} -> ${newState}`);
+            
+            switch (newState) {
+                case 'connecting':
+                    this.ui.setConnectionStatus('connecting');
+                    this.ui.setStatus('Connecting to server...', 'processing');
+                    break;
+                    
+                case 'connected':
+                    this.ui.setConnectionStatus('connected');
+                    this.ui.setStatus('Ready to assist');
+                    
+                    // Show queued message count if any
+                    const queuedCount = this.ws.getQueuedMessageCount();
+                    if (queuedCount > 0) {
+                        this.ui.setStatus(`Connected - processing ${queuedCount} queued messages`, 'processing');
+                    }
+                    break;
+                    
+                case 'reconnecting':
+                    this.ui.setConnectionStatus('reconnecting');
+                    this.ui.setStatus('Connection lost - reconnecting...', 'error');
+                    break;
+                    
+                case 'disconnected':
+                    this.ui.setConnectionStatus('disconnected');
+                    this.ui.setStatus('Disconnected from server', 'error');
+                    break;
+            }
+        };
+        
+        // Enhanced reconnection feedback
+        this.ws.onReconnectAttempt = (attempt, maxAttempts, delay) => {
+            this.ui.setStatus(`Reconnecting... (${attempt}/${maxAttempts}) - next attempt in ${Math.round(delay/1000)}s`, 'error');
+        };
+        
+        this.ws.onReconnectFailed = () => {
+            this.ui.setStatus('Failed to reconnect - please refresh the page', 'error');
+        };
 
         this.ws.onSessionInfo = (info) => {
             console.log('Session info received:', info);
@@ -442,12 +484,22 @@ class ClaudeAssistant {
         // Add user message to UI
         this.ui.addUserMessage(transcript);
 
-        // Send to WebSocket
-        if (this.ws && this.ws.isConnected()) {
-            this.ui.setStatus('Sending to Claude...', 'processing');
-            this.ws.sendUserMessage(transcript);
+        // Send to WebSocket with enhanced connection handling
+        if (this.ws) {
+            const connectionState = this.ws.getConnectionState();
+            
+            if (connectionState === 'connected') {
+                this.ui.setStatus('Sending to Claude...', 'processing');
+                this.ws.sendUserMessage(transcript);
+            } else if (connectionState === 'connecting' || connectionState === 'reconnecting') {
+                this.ui.setStatus('Connecting to server, message queued...', 'processing');
+                this.ws.sendUserMessage(transcript); // Will be queued automatically
+            } else {
+                this.ui.setStatus('Reconnecting to server...', 'error');
+                this.ws.sendUserMessage(transcript); // Will trigger reconnection and queue message
+            }
         } else {
-            this.ui.setStatus('Not connected to server', 'error');
+            this.ui.setStatus('WebSocket client not initialized', 'error');
         }
     }
 
