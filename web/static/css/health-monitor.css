@@ -1,0 +1,190 @@
+/* Health Monitor Styles */
+
+.health-panel {
+    position: fixed;
+    top: 60px;
+    right: 16px;
+    width: 320px;
+    max-height: calc(100vh - 80px);
+    background: hsl(var(--b1));
+    border: 1px solid hsl(var(--b3));
+    border-radius: 12px;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    backdrop-filter: blur(20px);
+    z-index: 1000;
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.health-panel.hidden {
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-10px);
+}
+
+.health-panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px;
+    border-bottom: 1px solid hsl(var(--b3));
+    background: hsl(var(--b1) / 0.8);
+}
+
+.health-panel-content {
+    padding: 16px;
+    max-height: calc(100vh - 140px);
+    overflow-y: auto;
+}
+
+.health-section {
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid hsl(var(--b3) / 0.5);
+}
+
+.health-section:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+}
+
+.health-section h4 {
+    color: hsl(var(--bc));
+    margin-bottom: 8px;
+    font-weight: 600;
+}
+
+.health-metric {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
+.health-metric .label {
+    color: hsl(var(--bc) / 0.7);
+    font-size: 0.75rem;
+}
+
+.health-metric .value {
+    color: hsl(var(--bc));
+    font-weight: 500;
+    font-size: 0.75rem;
+}
+
+.session-health-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.health-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.75rem;
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.progress-bar {
+    position: relative;
+    width: 100%;
+    height: 20px;
+    background: hsl(var(--b3));
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background: hsl(var(--su));
+    transition: width 0.3s ease;
+    border-radius: 10px;
+}
+
+.progress-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: hsl(var(--suc));
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.cleanup-details {
+    font-size: 0.75rem;
+}
+
+/* Health status badges */
+.badge-success {
+    background: hsl(var(--su));
+    color: hsl(var(--suc));
+}
+
+.badge-warning {
+    background: hsl(var(--wa));
+    color: hsl(var(--wac));
+}
+
+.badge-error {
+    background: hsl(var(--er));
+    color: hsl(var(--erc));
+}
+
+.badge-neutral {
+    background: hsl(var(--b3));
+    color: hsl(var(--bc));
+}
+
+/* Health toggle button states */
+#btn-health-toggle.text-success {
+    color: hsl(var(--su));
+}
+
+#btn-health-toggle.text-warning {
+    color: hsl(var(--wa));
+}
+
+#btn-health-toggle.text-error {
+    color: hsl(var(--er));
+}
+
+#btn-health-toggle:hover {
+    background: hsl(var(--b3) / 0.2);
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .health-panel {
+        right: 8px;
+        width: calc(100vw - 16px);
+        max-width: 320px;
+    }
+}
+
+/* Scrollbar styling for health panel */
+.health-panel-content::-webkit-scrollbar {
+    width: 4px;
+}
+
+.health-panel-content::-webkit-scrollbar-track {
+    background: hsl(var(--b3) / 0.3);
+    border-radius: 2px;
+}
+
+.health-panel-content::-webkit-scrollbar-thumb {
+    background: hsl(var(--bc) / 0.3);
+    border-radius: 2px;
+}
+
+.health-panel-content::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--bc) / 0.5);
+}

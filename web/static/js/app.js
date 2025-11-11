@@ -18,6 +18,7 @@ class ClaudeAssistant {
         // Initialize components (access from window for non-module scripts)
         this.audio = new window.AudioManager();
         this.ui = new window.UIComponents();
+        this.healthMonitor = new window.HealthMonitor();
         this.ws = null;
         this.sessionId = null;
         this.wakeWord = null;

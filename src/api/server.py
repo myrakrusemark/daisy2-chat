@@ -6,6 +6,7 @@ import zipfile
 import tempfile
 from pathlib import Path
 from typing import Optional
+from datetime import datetime
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
@@ -102,6 +103,61 @@ async def health_check():
         "status": "healthy",
         "active_sessions": len(session_manager.sessions) if session_manager else 0
     }
+
+
+@app.get("/api/health/system")
+async def get_system_health():
+    """Get comprehensive system health information"""
+    if not session_manager:
+        raise HTTPException(status_code=503, detail="Session manager not initialized")
+    
+    return session_manager.get_system_health()
+
+
+@app.get("/api/health/sessions/{session_id}")
+async def get_session_health(session_id: str):
+    """Get detailed health information for a specific session"""
+    health_info = session_manager.get_session_health(session_id)
+    if not health_info:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    return health_info
+
+
+@app.get("/api/health/sessions")
+async def get_all_sessions_health():
+    """Get health information for all active sessions"""
+    sessions_health = []
+    for session_id in session_manager.sessions.keys():
+        health_info = session_manager.get_session_health(session_id)
+        if health_info:
+            sessions_health.append(health_info)
+    
+    return {
+        "sessions": sessions_health,
+        "total_sessions": len(sessions_health),
+        "system_health": session_manager.get_system_health()
+    }
+
+
+@app.get("/api/sessions/{session_id}/cleanup-progress")
+async def get_cleanup_progress(session_id: str):
+    """Get cleanup progress for a session"""
+    progress = session_manager.get_cleanup_progress(session_id)
+    if not progress:
+        raise HTTPException(status_code=404, detail="No cleanup in progress for this session")
+    
+    return progress
+
+
+@app.delete("/api/sessions/{session_id}/force")
+async def force_delete_session(session_id: str):
+    """Force delete a session with progress tracking"""
+    progress = await session_manager.delete_session_with_progress(session_id, force=True)
+    if not progress:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    return {"message": "Force cleanup initiated", "cleanup_progress": session_manager.get_cleanup_progress(session_id)}
 
 
 @app.post("/api/sessions", response_model=SessionInfo)
@@ -350,8 +406,10 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
         )
         log.info(f"Created new session {session.session_id} for WebSocket connection")
 
-    # Attach websocket to session
+    # Attach websocket to session and update connection metrics
     session.websocket = websocket
+    session.metrics.websocket_connected = True
+    session.metrics.last_websocket_activity = datetime.now()
 
     # Create handler
     handler = WebSocketHandler(websocket, session)
@@ -365,10 +423,12 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
 
     except Exception as e:
         log.error(f"WebSocket error for session {session_id}: {e}")
+        session.metrics.websocket_errors += 1
 
     finally:
-        # Detach websocket
+        # Detach websocket and update metrics
         session.websocket = None
+        session.metrics.websocket_connected = False
 
 
 @app.post("/api/download/generate", response_model=DownloadLinkResponse)

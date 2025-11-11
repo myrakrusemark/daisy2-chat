@@ -150,6 +150,11 @@ class WebSocketHandler:
             # Mark as processing
             self.processing = True
             self.interrupted = False
+            
+            # Start request timing for performance tracking
+            from .server import session_manager
+            if session_manager:
+                session_manager.start_request_timing(self.session.session_id)
 
             # Add to conversation history
             self.session.conversation.add_user_message(content)
@@ -276,10 +281,16 @@ class WebSocketHandler:
         except Exception as e:
             log.error(f"Error handling user message: {e}")
             await self.send_error(f"Error processing message: {str(e)}")
+            # End timing as failure
+            if session_manager:
+                session_manager.end_request_timing(self.session.session_id, success=False)
 
         finally:
             self.processing = False
             self.current_task = None
+            # End timing as success if not already ended
+            if session_manager and not self.interrupted:
+                session_manager.end_request_timing(self.session.session_id, success=True)
 
     async def handle_user_message(self, content: str):
         """
@@ -502,6 +513,13 @@ class WebSocketHandler:
 
         elif message_type == "get_transcription_status":
             await self.get_transcription_status()
+
+        elif message_type == "ping":
+            # Respond to ping with pong for latency measurement
+            await self.send_message({
+                "type": "pong",
+                "timestamp": message_data.get("timestamp", None)
+            })
 
         else:
             log.warning(f"Unknown message type: {message_type}")

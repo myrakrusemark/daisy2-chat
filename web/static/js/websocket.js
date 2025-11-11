@@ -7,6 +7,21 @@ class WebSocketClient {
         this.reconnectDelay = 1000;
         this.connected = false;
 
+        // Connection quality tracking
+        this.connectionQuality = {
+            latency: 0,
+            messagesSent: 0,
+            messagesReceived: 0,
+            errors: 0,
+            lastPingTime: null,
+            avgLatency: 0,
+            connectionStart: null,
+            uptime: 0
+        };
+        
+        this.pingInterval = null;
+        this.pingIntervalMs = 30000; // 30 seconds
+
         // Callbacks
         this.onConnect = null;
         this.onDisconnect = null;
@@ -42,6 +57,11 @@ class WebSocketClient {
         this.ws.onopen = () => {
             this.connected = true;
             this.reconnectAttempts = 0;
+            
+            // Initialize connection quality tracking
+            this.connectionQuality.connectionStart = Date.now();
+            this.connectionQuality.errors = 0;
+            this.startPingMonitoring();
 
             // Server handles missing sessions automatically
             if (this.onConnect) {
@@ -51,6 +71,7 @@ class WebSocketClient {
 
         this.ws.onclose = () => {
             this.connected = false;
+            this.stopPingMonitoring();
 
             if (this.onDisconnect) {
                 this.onDisconnect();
@@ -80,14 +101,32 @@ class WebSocketClient {
 
         this.ws.onerror = (error) => {
             console.error('WebSocket error:', error);
+            this.connectionQuality.errors++;
         };
 
         this.ws.onmessage = (event) => {
             try {
+                this.connectionQuality.messagesReceived++;
                 const message = JSON.parse(event.data);
+                
+                // Handle ping/pong for latency measurement
+                if (message.type === 'pong' && this.connectionQuality.lastPingTime) {
+                    const latency = Date.now() - this.connectionQuality.lastPingTime;
+                    this.connectionQuality.latency = latency;
+                    
+                    // Calculate average latency
+                    if (this.connectionQuality.avgLatency === 0) {
+                        this.connectionQuality.avgLatency = latency;
+                    } else {
+                        this.connectionQuality.avgLatency = (this.connectionQuality.avgLatency * 0.8) + (latency * 0.2);
+                    }
+                    return;
+                }
+                
                 this.handleMessage(message);
             } catch (error) {
                 console.error('Error parsing WebSocket message:', error);
+                this.connectionQuality.errors++;
             }
         };
     }
@@ -243,6 +282,7 @@ class WebSocketClient {
         };
 
         this.ws.send(JSON.stringify(message));
+        this.connectionQuality.messagesSent++;
         return true;
     }
 
@@ -262,6 +302,7 @@ class WebSocketClient {
         };
 
         this.ws.send(JSON.stringify(message));
+        this.connectionQuality.messagesSent++;
         return true;
     }
 
@@ -279,6 +320,7 @@ class WebSocketClient {
         };
 
         this.ws.send(JSON.stringify(message));
+        this.connectionQuality.messagesSent++;
         return true;
     }
 
@@ -296,6 +338,7 @@ class WebSocketClient {
         };
 
         this.ws.send(JSON.stringify(message));
+        this.connectionQuality.messagesSent++;
         return true;
     }
 
@@ -312,6 +355,7 @@ class WebSocketClient {
         };
 
         this.ws.send(JSON.stringify(message));
+        this.connectionQuality.messagesSent++;
         return true;
     }
 
@@ -329,6 +373,7 @@ class WebSocketClient {
         };
 
         this.ws.send(JSON.stringify(message));
+        this.connectionQuality.messagesSent++;
         return true;
     }
 
@@ -345,7 +390,84 @@ class WebSocketClient {
         };
 
         this.ws.send(JSON.stringify(message));
+        this.connectionQuality.messagesSent++;
         return true;
+    }
+
+    /**
+     * Start ping monitoring for latency measurement
+     */
+    startPingMonitoring() {
+        if (this.pingInterval) return;
+        
+        this.pingInterval = setInterval(() => {
+            if (this.connected) {
+                this.sendPing();
+            }
+        }, this.pingIntervalMs);
+    }
+
+    /**
+     * Stop ping monitoring
+     */
+    stopPingMonitoring() {
+        if (this.pingInterval) {
+            clearInterval(this.pingInterval);
+            this.pingInterval = null;
+        }
+    }
+
+    /**
+     * Send ping to measure latency
+     */
+    sendPing() {
+        if (!this.connected) return;
+        
+        this.connectionQuality.lastPingTime = Date.now();
+        const pingMessage = {
+            type: 'ping',
+            timestamp: this.connectionQuality.lastPingTime
+        };
+        
+        this.ws.send(JSON.stringify(pingMessage));
+        this.connectionQuality.messagesSent++;
+    }
+
+    /**
+     * Get connection quality metrics
+     */
+    getConnectionQuality() {
+        // Calculate uptime
+        if (this.connectionQuality.connectionStart) {
+            this.connectionQuality.uptime = Date.now() - this.connectionQuality.connectionStart;
+        }
+        
+        // Calculate message loss rate
+        const totalMessages = this.connectionQuality.messagesSent + this.connectionQuality.messagesReceived;
+        const errorRate = totalMessages > 0 ? (this.connectionQuality.errors / totalMessages) * 100 : 0;
+        
+        // Determine connection quality rating
+        let qualityRating = 'excellent';
+        if (this.connectionQuality.avgLatency > 1000 || errorRate > 5) {
+            qualityRating = 'poor';
+        } else if (this.connectionQuality.avgLatency > 500 || errorRate > 2) {
+            qualityRating = 'fair';
+        } else if (this.connectionQuality.avgLatency > 200 || errorRate > 0.5) {
+            qualityRating = 'good';
+        }
+        
+        return {
+            connected: this.connected,
+            latency: Math.round(this.connectionQuality.latency),
+            avgLatency: Math.round(this.connectionQuality.avgLatency),
+            messagesSent: this.connectionQuality.messagesSent,
+            messagesReceived: this.connectionQuality.messagesReceived,
+            errors: this.connectionQuality.errors,
+            errorRate: Math.round(errorRate * 100) / 100,
+            uptime: this.connectionQuality.uptime,
+            qualityRating: qualityRating,
+            reconnectAttempts: this.reconnectAttempts
+        };
     }
 
     /**
