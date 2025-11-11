@@ -403,9 +403,20 @@ class WhisperTranscriptionService:
                 log.debug(f"Skipping short audio chunk ({len(audio_array)} samples)")
                 return
             
-            # Run transcription in our dedicated thread pool to avoid blocking
+            # Run transcription in our dedicated thread pool with asyncio timeout
             loop = asyncio.get_event_loop()
-            result = await loop.run_in_executor(self.audio_thread_pool, self._transcribe_audio_with_timeout, audio_array, streaming)
+            try:
+                # Use asyncio.wait_for instead of signal-based timeout (signals don't work in thread pools)
+                result = await asyncio.wait_for(
+                    loop.run_in_executor(self.audio_thread_pool, self._transcribe_audio_internal, audio_array, streaming),
+                    timeout=15.0  # 15 second timeout
+                )
+            except asyncio.TimeoutError:
+                log.error("Whisper transcription timed out after 15 seconds")
+                result = None
+            except Exception as e:
+                log.error(f"Error in whisper transcription: {e}")
+                result = None
             
             if result and self.transcription_callback:
                 # Update last transcription time when we get actual text
@@ -423,46 +434,6 @@ class WhisperTranscriptionService:
                 
         except Exception as e:
             log.error(f"Error in async audio processing: {e}")
-
-    def _transcribe_audio_with_timeout(self, audio_array: np.ndarray, streaming: bool = False, timeout_seconds: int = 15) -> Optional[TranscriptionResult]:
-        """Transcribe audio with timeout protection"""
-        import signal
-        
-        class TimeoutException(Exception):
-            pass
-        
-        def timeout_handler(signum, frame):
-            raise TimeoutException("Whisper transcription timeout")
-        
-        try:
-            # Set up timeout signal
-            old_handler = signal.signal(signal.SIGALRM, timeout_handler)
-            signal.alarm(timeout_seconds)
-            
-            result = self._transcribe_audio_internal(audio_array, streaming)
-            
-            # Cancel timeout
-            signal.alarm(0)
-            signal.signal(signal.SIGALRM, old_handler)
-            
-            return result
-            
-        except TimeoutException:
-            log.error(f"Whisper transcription timed out after {timeout_seconds} seconds")
-            signal.alarm(0)
-            try:
-                signal.signal(signal.SIGALRM, old_handler)
-            except:
-                pass
-            return None
-        except Exception as e:
-            log.error(f"Error in transcription with timeout: {e}")
-            signal.alarm(0)
-            try:
-                signal.signal(signal.SIGALRM, old_handler)
-            except:
-                pass
-            return None
 
     def _transcribe_audio_internal(self, audio_array: np.ndarray, streaming: bool = False) -> Optional[TranscriptionResult]:
         """Internal transcription method (blocking call)"""
