@@ -199,14 +199,18 @@ class AudioManager {
             let transcriptToSend = this.accumulatedTranscript.trim();
 
             // In push-to-talk mode, if we have no final transcript but have interim, use that
+            // But only if we actually received speech input during this session
             if (!transcriptToSend && this.lastInterimTranscript && this.currentMode === 'push-to-talk') {
                 transcriptToSend = this.lastInterimTranscript.trim();
                 console.log('Using interim transcript for push-to-talk:', transcriptToSend);
             }
 
-            // Send transcript if we have one
+            // Send transcript only if we have one and it's from the current session
             if (transcriptToSend && this.onTranscript) {
+                console.log('Browser STT sending transcript:', transcriptToSend);
                 this.onTranscript(transcriptToSend);
+            } else if (!transcriptToSend) {
+                console.log('Browser STT: No transcript to send - session ended without speech');
             }
 
             // Clear the buffers
@@ -562,6 +566,9 @@ class AudioManager {
             this.currentServerMode = mode;
             console.log(`Starting server audio streaming in ${mode} mode`);
             
+            // Clear any previous transcription state
+            this._clearTranscriptionState();
+            
             // Get microphone access
             const stream = await navigator.mediaDevices.getUserMedia({ 
                 audio: {
@@ -853,6 +860,16 @@ class AudioManager {
         this.lastTranscriptText = ''; // Clear previous text tracker
         // Don't start timer yet - wait for first transcription result
     }
+    
+    /**
+     * Clear transcription state when starting new session
+     */
+    _clearTranscriptionState() {
+        this.lastTranscriptionTime = null;
+        this.currentInterimTranscript = '';
+        this.lastTranscriptText = '';
+        this._clearSilenceTimer();
+    }
 
     /**
      * Reset the silence timer
@@ -913,23 +930,31 @@ class AudioManager {
             currentInterimTranscript: this.currentInterimTranscript,
             hasOnTranscript: !!this.onTranscript,
             transcriptLength: finalTranscript.length,
-            transcriptTrimmed: finalTranscript.trim()
+            transcriptTrimmed: finalTranscript.trim(),
+            lastTranscriptionTime: this.lastTranscriptionTime
         });
         
-        if (finalTranscript.trim() && this.onTranscript) {
+        // Only send transcript if we have actual new text AND we've received transcription results in this session
+        if (finalTranscript.trim() && this.onTranscript && this.lastTranscriptionTime) {
             // Set accumulated transcript for normal flow compatibility
             this.accumulatedTranscript = finalTranscript.trim();
             console.log('Calling this.onTranscript with result:', finalTranscript.trim());
             this.onTranscript(finalTranscript.trim());
-        } else if (!finalTranscript.trim()) {
-            console.log('No final transcript to send - empty transcript');
+        } else if (!finalTranscript.trim() || !this.lastTranscriptionTime) {
+            console.log('No final transcript to send - empty transcript or no transcription activity in this session');
             // For wake-word mode, restart listening if no transcript
             if (this.currentServerMode === 'wake-word' && this.onEnd) {
                 this.onEnd();
             }
+            // For push-to-talk mode, just stop without sending anything
+            console.log('PTT session ended without transcription - not sending previous message');
         } else {
             console.log('No onTranscript callback available');
         }
+        
+        // Clear the interim transcript buffer after processing
+        this.currentInterimTranscript = '';
+        this.lastTranscriptText = '';
     }
 
     /**
