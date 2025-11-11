@@ -10,9 +10,10 @@ import base64
 import tempfile
 import subprocess
 import numpy as np
+import signal
 from typing import Callable, Optional, AsyncGenerator
 from dataclasses import dataclass
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 
 try:
     from faster_whisper import WhisperModel
@@ -82,7 +83,7 @@ class WhisperTranscriptionService:
         
         # Initialize thread pool for audio processing (reuse threads instead of creating new tasks)
         self.audio_thread_pool = ThreadPoolExecutor(
-            max_workers=2,  # Limit concurrent audio processing to prevent overload
+            max_workers=4,  # Increased from 2 to 4 for better resilience against stuck tasks
             thread_name_prefix="whisper_audio"
         )
         
@@ -177,7 +178,7 @@ class WhisperTranscriptionService:
         if hasattr(self, 'audio_thread_pool'):
             self.audio_thread_pool.shutdown(wait=False)
             self.audio_thread_pool = ThreadPoolExecutor(
-                max_workers=2,
+                max_workers=4,  # Match increased pool size
                 thread_name_prefix="whisper_audio"
             )
             
@@ -357,24 +358,36 @@ class WhisperTranscriptionService:
                 'pipe:1'                        # Write to stdout
             ]
             
-            # Run conversion in our dedicated thread pool with pipes
+            # Run conversion in our dedicated thread pool with pipes and timeout
             loop = asyncio.get_event_loop()
-            result = await loop.run_in_executor(
-                self.audio_thread_pool, 
-                lambda: subprocess.run(
-                    ffmpeg_cmd, 
-                    input=audio_data, 
-                    capture_output=True
+            try:
+                result = await loop.run_in_executor(
+                    self.audio_thread_pool, 
+                    lambda: subprocess.run(
+                        ffmpeg_cmd, 
+                        input=audio_data, 
+                        capture_output=True,
+                        timeout=10  # 10 second timeout to prevent hanging
+                    )
                 )
-            )
+            except subprocess.TimeoutExpired:
+                log.error("FFmpeg conversion timed out after 10 seconds")
+                return None
+            except Exception as e:
+                log.error(f"FFmpeg execution failed: {e}")
+                return None
             
             if result.returncode != 0:
-                log.error(f"FFmpeg conversion failed: {result.stderr}")
+                log.error(f"FFmpeg conversion failed (code {result.returncode}): {result.stderr}")
                 return None
             
             # Convert raw PCM to numpy array
-            audio_array = np.frombuffer(result.stdout, dtype=np.int16).astype(np.float32) / 32768.0
-            return audio_array
+            try:
+                audio_array = np.frombuffer(result.stdout, dtype=np.int16).astype(np.float32) / 32768.0
+                return audio_array
+            except Exception as e:
+                log.error(f"Error converting FFmpeg output to numpy array: {e}")
+                return None
                 
         except Exception as e:
             log.error(f"Error in optimized audio conversion: {e}")
@@ -392,7 +405,7 @@ class WhisperTranscriptionService:
             
             # Run transcription in our dedicated thread pool to avoid blocking
             loop = asyncio.get_event_loop()
-            result = await loop.run_in_executor(self.audio_thread_pool, self._transcribe_audio, audio_array, streaming)
+            result = await loop.run_in_executor(self.audio_thread_pool, self._transcribe_audio_with_timeout, audio_array, streaming)
             
             if result and self.transcription_callback:
                 # Update last transcription time when we get actual text
@@ -411,8 +424,48 @@ class WhisperTranscriptionService:
         except Exception as e:
             log.error(f"Error in async audio processing: {e}")
 
-    def _transcribe_audio(self, audio_array: np.ndarray, streaming: bool = False) -> Optional[TranscriptionResult]:
-        """Transcribe audio using faster-whisper (blocking call)"""
+    def _transcribe_audio_with_timeout(self, audio_array: np.ndarray, streaming: bool = False, timeout_seconds: int = 15) -> Optional[TranscriptionResult]:
+        """Transcribe audio with timeout protection"""
+        import signal
+        
+        class TimeoutException(Exception):
+            pass
+        
+        def timeout_handler(signum, frame):
+            raise TimeoutException("Whisper transcription timeout")
+        
+        try:
+            # Set up timeout signal
+            old_handler = signal.signal(signal.SIGALRM, timeout_handler)
+            signal.alarm(timeout_seconds)
+            
+            result = self._transcribe_audio_internal(audio_array, streaming)
+            
+            # Cancel timeout
+            signal.alarm(0)
+            signal.signal(signal.SIGALRM, old_handler)
+            
+            return result
+            
+        except TimeoutException:
+            log.error(f"Whisper transcription timed out after {timeout_seconds} seconds")
+            signal.alarm(0)
+            try:
+                signal.signal(signal.SIGALRM, old_handler)
+            except:
+                pass
+            return None
+        except Exception as e:
+            log.error(f"Error in transcription with timeout: {e}")
+            signal.alarm(0)
+            try:
+                signal.signal(signal.SIGALRM, old_handler)
+            except:
+                pass
+            return None
+
+    def _transcribe_audio_internal(self, audio_array: np.ndarray, streaming: bool = False) -> Optional[TranscriptionResult]:
+        """Internal transcription method (blocking call)"""
         try:
             log.debug(f"Transcribing audio: {len(audio_array)} samples, {len(audio_array)/self.sample_rate:.2f}s, streaming={streaming}")
             
