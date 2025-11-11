@@ -360,17 +360,30 @@ class UIComponents {
         this.settingsPanelEl.classList.toggle('collapsed');
     }
 
-    showBrowserWarning(issues) {
+    showBrowserWarning(issues, compat = null) {
         const warningEl = document.getElementById('browser-warning');
         const textEl = document.getElementById('browser-warning-text');
 
-        textEl.innerHTML = `
-            <p>Your browser has the following compatibility issues:</p>
-            <ul class="list-disc list-inside mt-2 mb-2">
-                ${issues.map(issue => `<li>${issue}</li>`).join('')}
-            </ul>
-            <p>For the best experience, use Firefox or Chrome.</p>
-        `;
+        // Check if these are critical issues
+        const hasCritical = compat && compat.criticalIssues && compat.criticalIssues.length > 0;
+        
+        if (hasCritical) {
+            textEl.innerHTML = `
+                <p class="text-error font-semibold">⚠️ Critical compatibility issues detected:</p>
+                <ul class="list-disc list-inside mt-2 mb-2">
+                    ${compat.criticalIssues.map(issue => `<li class="text-error">${issue}</li>`).join('')}
+                </ul>
+                <p>These features are required for the voice assistant to function. Please use a modern browser like Firefox or Chrome.</p>
+            `;
+        } else {
+            textEl.innerHTML = `
+                <p class="text-info">ℹ️ Browser compatibility notes:</p>
+                <ul class="list-disc list-inside mt-2 mb-2">
+                    ${issues.map(issue => `<li>${issue}</li>`).join('')}
+                </ul>
+                <p class="text-success">✅ <strong>Server transcription available</strong> - these limitations are automatically bypassed!</p>
+            `;
+        }
 
         // Show modal using DaisyUI method
         warningEl.showModal();

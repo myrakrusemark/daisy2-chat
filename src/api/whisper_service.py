@@ -12,6 +12,7 @@ import subprocess
 import numpy as np
 from typing import Callable, Optional, AsyncGenerator
 from dataclasses import dataclass
+from concurrent.futures import ThreadPoolExecutor
 
 try:
     from faster_whisper import WhisperModel
@@ -35,12 +36,12 @@ class TranscriptionResult:
 class WhisperTranscriptionService:
     """Real-time whisper transcription service"""
     
-    def __init__(self, model_size: str = "base", language: str = "en"):
+    def __init__(self, model_size: str = "tiny", language: str = "en"):
         """
         Initialize whisper transcription service
         
         Args:
-            model_size: Whisper model size (tiny, base, small, medium, large)
+            model_size: Whisper model size (tiny=fastest, base, small, medium, large=best quality)
             language: Language code for transcription
         """
         if not WHISPER_AVAILABLE:
@@ -78,6 +79,12 @@ class WhisperTranscriptionService:
         # Initialize faster-whisper model
         self.model = None
         self._initialize_model()
+        
+        # Initialize thread pool for audio processing (reuse threads instead of creating new tasks)
+        self.audio_thread_pool = ThreadPoolExecutor(
+            max_workers=2,  # Limit concurrent audio processing to prevent overload
+            thread_name_prefix="whisper_audio"
+        )
         
         log.info(f"WhisperTranscriptionService initialized with model: {model_size}, language: {language}")
 
@@ -165,6 +172,14 @@ class WhisperTranscriptionService:
         # Clear session timeout
         self.session_start_time = None
         self.accumulated_transcription = ""
+        
+        # Shutdown thread pool and create new one to clean up any stuck tasks
+        if hasattr(self, 'audio_thread_pool'):
+            self.audio_thread_pool.shutdown(wait=False)
+            self.audio_thread_pool = ThreadPoolExecutor(
+                max_workers=2,
+                thread_name_prefix="whisper_audio"
+            )
             
         log.info("Stopped transcription session")
 
@@ -304,46 +319,65 @@ class WhisperTranscriptionService:
             log.error(f"Error processing audio: {e}")
 
     async def _convert_audio_to_wav(self, audio_data: bytes) -> Optional[np.ndarray]:
-        """Convert WebM/Opus audio to numpy array for Whisper"""
+        """Convert WebM/Opus audio to numpy array for Whisper (optimized direct processing)"""
         try:
-            # Create temporary files
-            with tempfile.NamedTemporaryFile(suffix='.webm') as input_file, \
-                 tempfile.NamedTemporaryFile(suffix='.wav') as output_file:
-                
-                # Write input audio
-                input_file.write(audio_data)
-                input_file.flush()
-                
-                # Convert using ffmpeg
-                ffmpeg_cmd = [
-                    'ffmpeg', '-y', '-i', input_file.name,
-                    '-ar', str(self.sample_rate),  # 16kHz
-                    '-ac', '1',  # mono
-                    '-f', 'wav',
-                    output_file.name
-                ]
-                
-                # Run conversion in thread pool
-                loop = asyncio.get_event_loop()
-                result = await loop.run_in_executor(
-                    None, 
-                    lambda: subprocess.run(ffmpeg_cmd, capture_output=True, text=True)
-                )
-                
-                if result.returncode != 0:
-                    log.error(f"FFmpeg conversion failed: {result.stderr}")
-                    return None
-                
-                # Read converted audio
-                output_file.seek(0)
-                audio_bytes = output_file.read()
-                
-                # Convert to numpy array
-                audio_array = np.frombuffer(audio_bytes[44:], dtype=np.int16).astype(np.float32) / 32768.0
-                return audio_array
+            # Try to extract raw PCM data directly from WebM container
+            # This is much faster than spawning FFmpeg subprocess for every chunk
+            
+            # First, try direct WAV processing if it looks like WAV
+            if audio_data.startswith(b'RIFF') and b'WAVE' in audio_data[:12]:
+                try:
+                    # Extract raw PCM data (skip WAV header)
+                    if len(audio_data) > 44:
+                        pcm_data = audio_data[44:]
+                        audio_array = np.frombuffer(pcm_data, dtype=np.int16).astype(np.float32) / 32768.0
+                        return audio_array
+                except Exception:
+                    pass
+            
+            # For WebM/Opus: Use single persistent FFmpeg process instead of spawning new ones
+            # TODO: Implement streaming FFmpeg or use opus decoder library directly
+            # For now, fall back to subprocess but with optimized command
+            return await self._convert_audio_subprocess_optimized(audio_data)
                 
         except Exception as e:
             log.error(f"Error converting audio: {e}")
+            return None
+
+    async def _convert_audio_subprocess_optimized(self, audio_data: bytes) -> Optional[np.ndarray]:
+        """Optimized FFmpeg subprocess call with reduced overhead"""
+        try:
+            # Use pipes instead of temporary files to reduce I/O overhead
+            ffmpeg_cmd = [
+                'ffmpeg', '-y', 
+                '-f', 'webm', '-i', 'pipe:0',  # Read from stdin
+                '-ar', str(self.sample_rate),   # 16kHz
+                '-ac', '1',                     # mono
+                '-f', 's16le',                  # Raw 16-bit little-endian PCM
+                'pipe:1'                        # Write to stdout
+            ]
+            
+            # Run conversion in our dedicated thread pool with pipes
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(
+                self.audio_thread_pool, 
+                lambda: subprocess.run(
+                    ffmpeg_cmd, 
+                    input=audio_data, 
+                    capture_output=True
+                )
+            )
+            
+            if result.returncode != 0:
+                log.error(f"FFmpeg conversion failed: {result.stderr}")
+                return None
+            
+            # Convert raw PCM to numpy array
+            audio_array = np.frombuffer(result.stdout, dtype=np.int16).astype(np.float32) / 32768.0
+            return audio_array
+                
+        except Exception as e:
+            log.error(f"Error in optimized audio conversion: {e}")
             return None
 
     async def _process_audio_async(self, audio_array: np.ndarray, streaming: bool = False):
@@ -356,9 +390,9 @@ class WhisperTranscriptionService:
                 log.debug(f"Skipping short audio chunk ({len(audio_array)} samples)")
                 return
             
-            # Run transcription in thread pool to avoid blocking
+            # Run transcription in our dedicated thread pool to avoid blocking
             loop = asyncio.get_event_loop()
-            result = await loop.run_in_executor(None, self._transcribe_audio, audio_array, streaming)
+            result = await loop.run_in_executor(self.audio_thread_pool, self._transcribe_audio, audio_array, streaming)
             
             if result and self.transcription_callback:
                 # Update last transcription time when we get actual text

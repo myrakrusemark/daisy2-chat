@@ -95,8 +95,13 @@ class ClaudeAssistant {
     checkCompatibility() {
         const compat = window.AudioManager.checkCompatibility();
 
-        if (!compat.supported) {
-            this.ui.showBrowserWarning(compat.issues);
+        // With server-side Whisper transcription, browser compatibility issues are much less critical
+        // Only show warnings for truly unsupported browsers or missing essential features
+        if (!compat.supported && compat.critical) {
+            this.ui.showBrowserWarning(compat.issues, compat);
+        } else if (!compat.supported) {
+            console.log('Browser compatibility notes:', compat.issues.join(', '));
+            console.log('✓ Server-side transcription available - browser limitations bypassed');
         }
     }
 

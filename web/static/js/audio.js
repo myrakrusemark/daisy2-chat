@@ -63,6 +63,14 @@ class AudioManager {
         this.mediaRecorder = null;
         this.audioChunks = [];
         
+        // Voice Activity Detection (VAD) for client-side optimization
+        this.vadEnabled = false; // Temporarily disabled until we fix the algorithm
+        this.vadThreshold = 0.02; // Base energy threshold for speech detection
+        this.vadSampleBuffer = new Float32Array(1024); // Buffer for VAD analysis
+        this.vadWindowSize = 5; // Number of recent chunks to analyze (reduced for faster adaptation)
+        this.vadEnergyHistory = [];
+        this.audioContext = null; // Will be created when needed for VAD
+        
         // STT Engine management
         this.preferredEngine = DEFAULT_STT_ENGINE;
         this.currentEngine = null;
@@ -610,22 +618,29 @@ class AudioManager {
             this.audioStreamingActive = true;
 
             // Handle audio data - send chunks immediately for both modes for real-time transcription
-            this.mediaRecorder.ondataavailable = (event) => {
+            this.mediaRecorder.ondataavailable = async (event) => {
                 console.log(`MediaRecorder data available: ${event.data.size} bytes, type: ${event.data.type}, mode: ${this.currentServerMode}`);
                 
                 if (event.data.size > 0 && this.audioStreamingActive) {
-                    // Send chunks immediately for both PTT and wake-word modes
-                    console.log('Converting audio data to base64 and sending to server for real-time transcription');
-                    const reader = new FileReader();
-                    reader.onload = () => {
-                        const audioData = reader.result.split(',')[1]; // Remove data URL prefix
-                        console.log(`Sending audio chunk: ${audioData.length} base64 chars`);
-                        websocket.sendAudioChunk(audioData);
-                    };
-                    reader.onerror = (error) => {
-                        console.error('FileReader error:', error);
-                    };
-                    reader.readAsDataURL(event.data);
+                    // Apply Voice Activity Detection to reduce server load
+                    const hasSpeech = await this.analyzeVoiceActivity(event.data);
+                    
+                    if (hasSpeech) {
+                        // Send chunks with detected speech for real-time transcription
+                        console.log('Converting audio data to base64 and sending to server for real-time transcription');
+                        const reader = new FileReader();
+                        reader.onload = () => {
+                            const audioData = reader.result.split(',')[1]; // Remove data URL prefix
+                            console.log(`Sending audio chunk: ${audioData.length} base64 chars`);
+                            websocket.sendAudioChunk(audioData);
+                        };
+                        reader.onerror = (error) => {
+                            console.error('FileReader error:', error);
+                        };
+                        reader.readAsDataURL(event.data);
+                    } else {
+                        console.log('VAD: Skipping silent audio chunk to reduce server load');
+                    }
                 } else {
                     console.log(`Skipping audio data: size=${event.data.size}, active=${this.audioStreamingActive}`);
                 }
@@ -816,38 +831,58 @@ class AudioManager {
      */
     static checkCompatibility() {
         const issues = [];
+        const criticalIssues = [];
 
-        // Check Speech Recognition
-        if (!window.SpeechRecognition && !window.webkitSpeechRecognition) {
-            issues.push('Speech Recognition (STT) is not supported in this browser');
+        try {
+            // Check MediaDevices API (required for server transcription)
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                criticalIssues.push('MediaDevices API not supported - microphone access unavailable');
+            }
+
+            // Check MediaRecorder API (required for server transcription)
+            if (!window.MediaRecorder) {
+                criticalIssues.push('MediaRecorder API not supported - audio recording unavailable');
+            }
+
+            // Check Speech Recognition (fallback only)
+            if (!window.SpeechRecognition && !window.webkitSpeechRecognition) {
+                issues.push('Browser Speech Recognition not available (fallback only)');
+            }
+
+            // Check Speech Synthesis (nice to have)
+            if (!window.speechSynthesis) {
+                issues.push('Browser Speech Synthesis not available (server TTS used instead)');
+            }
+
+            // Detect browser safely
+            const userAgent = (navigator.userAgent || '').toLowerCase();
+            const browser = userAgent.includes('firefox') ? 'firefox' :
+                           userAgent.includes('chrome') ? 'chrome' :
+                           userAgent.includes('edge') ? 'edge' :
+                           userAgent.includes('safari') ? 'safari' : 'unknown';
+
+            console.log(`Browser detected: ${browser} - Server transcription removes most compatibility concerns`);
+
+            return {
+                supported: criticalIssues.length === 0,
+                critical: criticalIssues.length > 0,
+                issues: [...criticalIssues, ...issues],
+                criticalIssues: criticalIssues,
+                nonCriticalIssues: issues,
+                browser: browser
+            };
+        } catch (error) {
+            console.error('Error during browser compatibility check:', error);
+            // Return safe defaults if detection fails
+            return {
+                supported: false,
+                critical: true,
+                issues: ['Browser compatibility check failed'],
+                criticalIssues: ['Browser compatibility check failed'],
+                nonCriticalIssues: [],
+                browser: 'unknown'
+            };
         }
-
-        // Check Speech Synthesis
-        if (!window.speechSynthesis) {
-            issues.push('Speech Synthesis (TTS) is not supported in this browser');
-        }
-
-        // Detect browser
-        const userAgent = navigator.userAgent.toLowerCase();
-        if (userAgent.includes('firefox')) {
-            // Firefox has good support
-            console.log('Firefox detected - full support expected');
-        } else if (userAgent.includes('chrome') || userAgent.includes('edge')) {
-            // Chrome/Edge have good support
-            console.log('Chrome/Edge detected - full support expected');
-        } else if (userAgent.includes('safari')) {
-            // Safari has limited support
-            issues.push('Safari has limited Web Speech API support. Consider using Firefox or Chrome for best experience.');
-        }
-
-        return {
-            supported: issues.length === 0,
-            issues: issues,
-            browser: userAgent.includes('firefox') ? 'firefox' :
-                    userAgent.includes('chrome') ? 'chrome' :
-                    userAgent.includes('edge') ? 'edge' :
-                    userAgent.includes('safari') ? 'safari' : 'unknown'
-        };
     }
 
     /**
@@ -955,6 +990,106 @@ class AudioManager {
         // Clear the interim transcript buffer after processing
         this.currentInterimTranscript = '';
         this.lastTranscriptText = '';
+    }
+
+    /**
+     * Voice Activity Detection (VAD) Methods
+     */
+
+    /**
+     * Calculate RMS energy of audio data for VAD
+     * @param {Uint8Array|Float32Array} audioData - Audio data
+     * @returns {number} RMS energy level
+     */
+    calculateAudioEnergy(audioData) {
+        let sum = 0;
+        let samples = audioData;
+        
+        // Convert to float if needed
+        if (audioData instanceof Uint8Array) {
+            samples = new Float32Array(audioData.length);
+            for (let i = 0; i < audioData.length; i++) {
+                samples[i] = (audioData[i] - 128) / 128.0; // Convert 8-bit to float
+            }
+        }
+        
+        // Calculate RMS
+        for (let i = 0; i < samples.length; i++) {
+            sum += samples[i] * samples[i];
+        }
+        
+        return Math.sqrt(sum / samples.length);
+    }
+
+    /**
+     * Analyze if audio chunk contains speech (VAD)
+     * @param {Blob} audioBlob - Audio blob to analyze
+     * @returns {Promise<boolean>} True if speech detected
+     */
+    async analyzeVoiceActivity(audioBlob) {
+        if (!this.vadEnabled) return true; // If VAD disabled, always send
+        
+        try {
+            // Convert blob to array buffer for analysis
+            const arrayBuffer = await audioBlob.arrayBuffer();
+            const uint8Array = new Uint8Array(arrayBuffer);
+            
+            // Calculate audio energy
+            const energy = this.calculateAudioEnergy(uint8Array);
+            
+            // Simple fixed threshold approach (much more reliable)
+            const threshold = this.vadThreshold; // Use fixed 0.02 threshold
+            
+            // Also check for sudden energy spikes which indicate speech
+            const hasSpeech = energy > threshold || energy > 0.01; // Very low baseline threshold
+            
+            if (hasSpeech) {
+                console.log(`VAD: Speech detected (energy: ${energy.toFixed(4)}, threshold: ${threshold.toFixed(4)})`);
+            } else {
+                console.log(`VAD: Silence detected (energy: ${energy.toFixed(4)}, threshold: ${threshold.toFixed(4)}), skipping transmission`);
+            }
+            
+            return hasSpeech;
+            
+        } catch (error) {
+            console.error('VAD analysis failed:', error);
+            return true; // On error, send anyway
+        }
+    }
+
+    /**
+     * Enable/disable client-side VAD
+     * @param {boolean} enabled - Enable VAD
+     */
+    setVADEnabled(enabled) {
+        this.vadEnabled = enabled;
+        console.log(`Client-side VAD: ${enabled ? 'enabled' : 'disabled'}`);
+    }
+
+    /**
+     * Set VAD sensitivity threshold
+     * @param {number} threshold - Energy threshold (0.001 - 0.1)
+     */
+    setVADThreshold(threshold) {
+        this.vadThreshold = Math.max(0.001, Math.min(0.1, threshold));
+        console.log(`VAD threshold set to: ${this.vadThreshold}`);
+    }
+
+    /**
+     * Temporary debug method to disable VAD for testing
+     */
+    disableVADTemporarily() {
+        this.vadEnabled = false;
+        console.log('VAD temporarily disabled for debugging. All audio chunks will be sent to server.');
+    }
+
+    /**
+     * Re-enable VAD with conservative settings
+     */
+    enableVADConservative() {
+        this.vadEnabled = true;
+        this.vadThreshold = 0.01; // Very low threshold to catch speech
+        console.log('VAD re-enabled with conservative settings (threshold: 0.01)');
     }
 
     /**
