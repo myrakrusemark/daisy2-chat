@@ -26,8 +26,8 @@ class HealthMonitor {
      */
     createHealthUI() {
         // Create health panel toggle button in navbar
-        const navbar = document.querySelector('.navbar .flex-none:last-child');
-        if (navbar) {
+        const navbarContainer = document.querySelector('.navbar .flex-none.gap-2');
+        if (navbarContainer) {
             const healthToggle = document.createElement('button');
             healthToggle.id = 'btn-health-toggle';
             healthToggle.className = 'btn btn-ghost btn-circle btn-sm';
@@ -37,7 +37,19 @@ class HealthMonitor {
                 </svg>
             `;
             healthToggle.title = 'System Health';
-            navbar.insertBefore(healthToggle, navbar.firstChild);
+            healthToggle.setAttribute('data-tooltip', 'System Health Dashboard');
+            
+            // Insert before the connection status indicator
+            const connectionStatus = document.getElementById('connection-status');
+            if (connectionStatus) {
+                navbarContainer.insertBefore(healthToggle, connectionStatus);
+            } else {
+                navbarContainer.appendChild(healthToggle);
+            }
+            
+            console.log('Health toggle button created and added to navbar');
+        } else {
+            console.error('Could not find navbar container for health toggle');
         }
 
         // Create health panel
@@ -166,11 +178,18 @@ class HealthMonitor {
 
         // Add to body
         document.body.appendChild(this.healthPanel);
+        console.log('Health panel added to body');
 
         // Get references to elements
         this.systemHealthEl = document.getElementById('system-health');
         this.sessionsHealthEl = document.getElementById('session-health');
         this.cleanupProgressEl = document.getElementById('cleanup-progress');
+        
+        console.log('Health panel elements found:', {
+            systemHealthEl: !!this.systemHealthEl,
+            sessionsHealthEl: !!this.sessionsHealthEl,
+            cleanupProgressEl: !!this.cleanupProgressEl
+        });
     }
 
     /**
@@ -180,7 +199,11 @@ class HealthMonitor {
         // Health panel toggle
         const toggleBtn = document.getElementById('btn-health-toggle');
         if (toggleBtn) {
-            toggleBtn.addEventListener('click', () => this.toggleHealthPanel());
+            toggleBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this.toggleHealthPanel();
+            });
         }
 
         // Close button
@@ -191,8 +214,11 @@ class HealthMonitor {
 
         // Click outside to close
         document.addEventListener('click', (e) => {
-            if (this.healthPanel && !this.healthPanel.contains(e.target) && 
-                e.target.id !== 'btn-health-toggle') {
+            const toggleBtn = document.getElementById('btn-health-toggle');
+            if (this.healthPanel && 
+                !this.healthPanel.classList.contains('hidden') &&
+                !this.healthPanel.contains(e.target) && 
+                toggleBtn && !toggleBtn.contains(e.target)) {
                 this.hideHealthPanel();
             }
         });
@@ -234,6 +260,8 @@ class HealthMonitor {
             if (systemResponse.ok) {
                 this.healthData = await systemResponse.json();
                 this.updateSystemHealthUI();
+            } else {
+                console.warn('Failed to get system health:', systemResponse.status);
             }
 
             // Get current session health if we have a session ID
@@ -253,11 +281,12 @@ class HealthMonitor {
                     if (cleanupResponse.ok) {
                         const cleanupData = await cleanupResponse.json();
                         this.updateCleanupProgressUI(cleanupData);
-                    } else {
+                    } else if (cleanupResponse.status === 404) {
+                        // No cleanup in progress, hide the section (normal)
                         this.hideCleanupProgress();
                     }
                 } catch (e) {
-                    // No cleanup in progress, hide the section
+                    // Network error or other issue, hide the section
                     this.hideCleanupProgress();
                 }
             }
@@ -266,7 +295,10 @@ class HealthMonitor {
             this.updateConnectionQualityUI();
 
         } catch (error) {
-            console.warn('Failed to update health data:', error);
+            // Only log non-404 errors to avoid noise
+            if (!error.message?.includes('404')) {
+                console.warn('Failed to update health data:', error);
+            }
         }
     }
 
@@ -459,6 +491,7 @@ class HealthMonitor {
      * Toggle health panel visibility
      */
     toggleHealthPanel() {
+        console.log('Toggle health panel called, current hidden state:', this.healthPanel.classList.contains('hidden'));
         if (this.healthPanel.classList.contains('hidden')) {
             this.showHealthPanel();
         } else {
@@ -470,17 +503,26 @@ class HealthMonitor {
      * Show health panel
      */
     showHealthPanel() {
-        this.healthPanel.classList.remove('hidden');
-        this.startMonitoring();
-        this.updateHealthData(); // Immediate update
+        console.log('Showing health panel');
+        if (this.healthPanel) {
+            this.healthPanel.classList.remove('hidden');
+            console.log('Health panel classes after show:', this.healthPanel.className);
+            this.startMonitoring();
+            this.updateHealthData(); // Immediate update
+        } else {
+            console.error('Health panel not found');
+        }
     }
 
     /**
      * Hide health panel
      */
     hideHealthPanel() {
-        this.healthPanel.classList.add('hidden');
-        this.stopMonitoring();
+        console.log('Hiding health panel');
+        if (this.healthPanel) {
+            this.healthPanel.classList.add('hidden');
+            this.stopMonitoring();
+        }
     }
 }
 

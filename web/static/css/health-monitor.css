@@ -6,20 +6,23 @@
     right: 16px;
     width: 320px;
     max-height: calc(100vh - 80px);
-    background: hsl(var(--b1));
-    border: 1px solid hsl(var(--b3));
+    background: hsl(var(--b1) / 0.95);
+    border: 2px solid hsl(var(--b3));
     border-radius: 12px;
-    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.3), 0 8px 12px -4px rgba(0, 0, 0, 0.1);
     backdrop-filter: blur(20px);
-    z-index: 1000;
+    z-index: 9999;
     overflow: hidden;
     transition: all 0.3s ease;
+    /* Debugging - make it more visible initially */
+    outline: 2px solid red;
 }
 
 .health-panel.hidden {
     opacity: 0;
     visibility: hidden;
-    transform: translateY(-10px);
+    transform: translateY(-10px) scale(0.95);
+    pointer-events: none;
 }
 
 .health-panel-header {
