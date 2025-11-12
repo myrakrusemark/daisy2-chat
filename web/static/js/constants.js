@@ -1,8 +1,8 @@
 // Global constants for Claude Assistant
 window.CLAUDE_CONSTANTS = {
     // Wake word configuration
-    WAKE_WORD: 'Hey Jarvis',
-    WAKE_WORD_DISPLAY: 'Hey Jarvis',
+    WAKE_WORD: 'Hey Daisy',
+    WAKE_WORD_DISPLAY: 'Hey Daisy',
     
     // UI messages
     READY_MESSAGE: 'Ready to assist',

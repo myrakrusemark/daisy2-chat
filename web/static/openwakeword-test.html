@@ -118,7 +118,7 @@
 
         <div class="info">
             <strong>Note:</strong> This demo uses OpenWakeWord running entirely in the browser via ONNX Runtime.
-            Say <strong>"Hey Jarvis"</strong>, <strong>"Alexa"</strong>, or <strong>"Hey Mycroft"</strong> to trigger detection!
+            Say <strong>"Hey Daisy"</strong> to trigger detection!
         </div>
 
         <div id="status" class="status idle">
@@ -172,9 +172,7 @@
                 
                 // Wake word detection thresholds
                 this.thresholds = {
-                    'hey_jarvis': 0.5,
-                    'alexa': 0.5,
-                    'hey_mycroft': 0.5
+                    'hey_daisy': 0.5
                 };
             }
 
@@ -224,16 +222,10 @@
 
                     // Load wake word models
                     this.addLog('Loading wake word models...');
-                    this.models.alexa = await ort.InferenceSession.create('lib/openwakeword/models/alexa_v0.1.onnx', {
+                    this.models.hey_daisy = await ort.InferenceSession.create('lib/openwakeword/models/hay_daizee.onnx', {
                         executionProviders: providers
                     });
-                    this.models.hey_jarvis = await ort.InferenceSession.create('lib/openwakeword/models/hey_jarvis_v0.1.onnx', {
-                        executionProviders: providers
-                    });
-                    this.models.hey_mycroft = await ort.InferenceSession.create('lib/openwakeword/models/hey_mycroft_v0.1.onnx', {
-                        executionProviders: providers
-                    });
-                    this.addLog('✓ Wake word models loaded (alexa, hey_jarvis, hey_mycroft)');
+                    this.addLog('✓ Wake word models loaded (hey_daisy)');
 
                 } catch (error) {
                     this.addLog(`❌ Error loading models: ${error.message}`);
@@ -310,7 +302,7 @@
             }
 
             simulateWakeWordDetection() {
-                const wakeWords = ['hey_jarvis', 'alexa', 'hey_mycroft'];
+                const wakeWords = ['hey_daisy'];
                 const detectedWord = wakeWords[Math.floor(Math.random() * wakeWords.length)];
                 
                 this.addLog(`🎯 WAKE WORD DETECTED: ${detectedWord}`, true);

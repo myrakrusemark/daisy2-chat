@@ -146,7 +146,7 @@
 <body>
     <div class="container">
         <h1>openWakeWord Web Demo</h1>
-        <h2>Click on Start Listening and Say "Hey Jarvis; Hey Mycroft; Alexa"</h2>
+        <h2>Click on Start Listening and Say "Hey Daisy"</h2>
         <p style="text-align: center;">Real-time wake word detection in your browser using ONNX Runtime.</p>
         
         <div class="backend-links">
@@ -227,9 +227,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Models ---
     let melspecModel, embeddingModel, vadModel;
     const models = {
-        'alexa': { url: 'lib/openwakeword/models/alexa_v0.1.onnx', session: null, scores: new Array(50).fill(0) },
-        'hey_mycroft': { url: 'lib/openwakeword/models/hey_mycroft_v0.1.onnx', session: null, scores: new Array(50).fill(0) },
-        'hey_jarvis': { url: 'lib/openwakeword/models/hey_jarvis_v0.1.onnx', session: null, scores: new Array(50).fill(0) },
+        'hey_daisy': { url: 'lib/openwakeword/models/hay_daizee.onnx', session: null, scores: new Array(50).fill(0) }
     };
 
     const audioProcessorCode = `

@@ -19,9 +19,7 @@ class WakeWordManager {
         this.embeddingModel = null;
         this.vadModel = null;
         this.models = {
-            'hey_jarvis': { url: '/static/lib/openwakeword/models/hey_jarvis_v0.1.onnx', session: null },
-            'hey_mycroft': { url: '/static/lib/openwakeword/models/hey_mycroft_v0.1.onnx', session: null },
-            'alexa': { url: '/static/lib/openwakeword/models/alexa_v0.1.onnx', session: null }
+            'hey_daisy': { url: '/static/lib/openwakeword/models/hay_daizee.onnx', session: null }
         };
 
         // Audio processing state
