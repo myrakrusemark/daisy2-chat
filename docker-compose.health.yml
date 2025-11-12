@@ -1,0 +1,60 @@
+# Docker Compose override for enhanced health monitoring
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.health.yml up
+
+version: '3.8'
+
+services:
+  cassistant:
+    environment:
+      # Enable test validation in health check
+      - HEALTH_CHECK_RUN_TESTS=true
+    healthcheck:
+      # More frequent health checks with test validation
+      test: ["CMD", "python", "/app/scripts/health_check.py"]
+      interval: 30s
+      timeout: 20s
+      start_period: 30s
+      retries: 3
+    labels:
+      # Labels for monitoring and alerting
+      - "com.docker.compose.healthcheck=extended"
+      - "com.docker.compose.test-validation=enabled"
+
+  # Optional: Health monitoring service
+  health-monitor:
+    image: alpine:latest
+    container_name: cassistant-health-monitor
+    depends_on:
+      - cassistant
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command: |
+      sh -c '
+        apk add --no-cache curl jq docker-cli
+        while true; do
+          echo "=== Health Check Report $(date) ==="
+          
+          # Get container health status
+          HEALTH_STATUS=$$(docker inspect cassistant --format="{{.State.Health.Status}}")
+          echo "Container Health: $$HEALTH_STATUS"
+          
+          if [ "$$HEALTH_STATUS" = "healthy" ]; then
+            echo "✅ Cassistant is healthy"
+          elif [ "$$HEALTH_STATUS" = "unhealthy" ]; then
+            echo "❌ Cassistant is unhealthy - checking logs..."
+            docker logs --tail=10 cassistant
+            
+            # Get detailed health check logs
+            echo "Health check details:"
+            docker inspect cassistant --format="{{range .State.Health.Log}}{{.Output}}{{end}}" | tail -1
+          else
+            echo "⏳ Cassistant health status: $$HEALTH_STATUS"
+          fi
+          
+          echo "==========================================\n"
+          sleep 60
+        done
+      '
+    restart: unless-stopped
+    profiles:
+      - monitoring

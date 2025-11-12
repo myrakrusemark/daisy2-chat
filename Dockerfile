@@ -57,9 +57,9 @@ ENV PORT=8000
 ENV LOG_LEVEL=INFO
 ENV PATH="/home/appuser/.local/bin:${PATH}"
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import requests; requests.get('http://localhost:8000/health')"
+# Health check with test validation
+HEALTHCHECK --interval=60s --timeout=30s --start-period=15s --retries=3 \
+    CMD python /app/scripts/health_check.py
 
 # Run the application
 CMD ["python", "-m", "src.api.server"]
