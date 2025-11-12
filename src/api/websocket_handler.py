@@ -39,6 +39,7 @@ class WebSocketHandler:
         self.processing = False
         self.interrupted = False
         self.current_task = None  # Track the current processing task
+        self.current_transcription_session_id = None  # Track active transcription session
 
         # Initialize TTS service
         self.tts = TTSService()
@@ -371,6 +372,7 @@ class WebSocketHandler:
         try:
             # Create unique session ID for this transcription
             transcription_session_id = f"{self.session.session_id}_{int(asyncio.get_event_loop().time())}"
+            self.current_transcription_session_id = transcription_session_id
             
             # Set up transcription callback
             def on_transcription_result(result: TranscriptionResult):
@@ -428,11 +430,16 @@ class WebSocketHandler:
             return
 
         try:
-            await self.whisper.stop_transcription()
-            await self.send_message({
-                "type": "server_transcription_stopped"
-            })
-            log.info("Stopped server transcription")
+            # Stop the current transcription session
+            if self.current_transcription_session_id:
+                await self.whisper.stop_transcription(self.current_transcription_session_id)
+                self.current_transcription_session_id = None
+                await self.send_message({
+                    "type": "server_transcription_stopped"
+                })
+                log.info("Stopped server transcription")
+            else:
+                log.warning("No active transcription session to stop")
 
         except Exception as e:
             log.error(f"Error stopping server transcription: {e}")
@@ -458,13 +465,19 @@ class WebSocketHandler:
             audio_bytes = base64.b64decode(audio_data)
             log.info(f"Processing audio chunk: {len(audio_bytes)} bytes")
             
-            # Process audio chunk
-            success = await self.whisper.process_audio_chunk(audio_bytes)
-            
-            if not success:
-                log.warning("Failed to process audio chunk")
+            # Process audio chunk for the current session
+            if self.current_transcription_session_id:
+                success = await self.whisper.process_audio_chunk(
+                    self.current_transcription_session_id, 
+                    audio_bytes
+                )
+                
+                if not success:
+                    log.warning("Failed to process audio chunk")
+                else:
+                    log.debug("Audio chunk processed successfully")
             else:
-                log.debug("Audio chunk processed successfully")
+                log.warning("No active transcription session for audio chunk")
 
         except Exception as e:
             log.error(f"Error processing audio chunk: {e}")

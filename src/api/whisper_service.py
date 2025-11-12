@@ -11,8 +11,8 @@ import tempfile
 import subprocess
 import numpy as np
 import signal
-from typing import Callable, Optional, AsyncGenerator
-from dataclasses import dataclass
+from typing import Callable, Optional, AsyncGenerator, Dict
+from dataclasses import dataclass, field
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 
 try:
@@ -34,6 +34,29 @@ class TranscriptionResult:
     language: str = "en"
 
 
+@dataclass
+class TranscriptionSession:
+    """Individual transcription session state"""
+    session_id: str
+    callback: Callable[[TranscriptionResult], None]
+    timeout_callback: Optional[Callable[[str], None]]
+    streaming_mode: bool
+    
+    # Audio buffer for this session
+    audio_buffer: bytearray = field(default_factory=bytearray)
+    cumulative_audio: bytearray = field(default_factory=bytearray)
+    
+    # Session timing
+    session_start_time: Optional[float] = None
+    last_transcription_time: Optional[float] = None
+    
+    # Accumulated text for timeout handling
+    accumulated_transcription: str = ""
+    
+    # Session-specific timers
+    silence_timer: Optional[threading.Timer] = None
+
+
 class WhisperTranscriptionService:
     """Real-time whisper transcription service"""
     
@@ -53,41 +76,26 @@ class WhisperTranscriptionService:
         self.sample_rate = 16000
         self.channels = 1
         
-        # Transcription state
-        self.is_transcribing = False
-        self.current_session_id = None
-        self.transcription_callback = None
+        # Multi-session management
+        self.active_sessions: Dict[str, TranscriptionSession] = {}
+        self.sessions_lock = threading.Lock()
         
-        # Audio buffer for processing
-        self.audio_buffer = bytearray()
-        self.buffer_lock = threading.Lock()
-        
-        # Cumulative audio context for streaming transcription
-        self.cumulative_audio = bytearray()
+        # Global settings for all sessions
         self.streaming_chunk_size = 16000  # 1 second of 16kHz audio (in samples)
-        
-        # Silence detection for auto-stopping
-        self.last_transcription_time = None
-        self.silence_timer = None
         self.silence_timeout = 3.0  # 3 seconds of silence before auto-stop
-        
-        # Session timeout for auto-submit
-        self.session_start_time = None
         self.max_session_duration = 20.0  # 20 seconds max session
-        self.timeout_callback = None
-        self.accumulated_transcription = ""
         
         # Initialize faster-whisper model
         self.model = None
         self._initialize_model()
         
-        # Initialize thread pool for audio processing (reuse threads instead of creating new tasks)
+        # Initialize thread pool for audio processing - increased for concurrent sessions
         self.audio_thread_pool = ThreadPoolExecutor(
-            max_workers=4,  # Increased from 2 to 4 for better resilience against stuck tasks
+            max_workers=8,  # Increased from 4 to 8 for better concurrent session support
             thread_name_prefix="whisper_audio"
         )
         
-        log.info(f"WhisperTranscriptionService initialized with model: {model_size}, language: {language}")
+        log.info(f"WhisperTranscriptionService initialized with model: {model_size}, language: {language} (multi-session support)")
 
     def _initialize_model(self):
         """Initialize the faster-whisper model"""
@@ -122,152 +130,136 @@ class WhisperTranscriptionService:
         Returns:
             True if started successfully
         """
-        if self.is_transcribing:
-            log.warning("Transcription already in progress")
-            return False
+        with self.sessions_lock:
+            if session_id in self.active_sessions:
+                log.warning(f"Transcription session {session_id} already active")
+                return False
             
-        try:
-            self.current_session_id = session_id
-            self.transcription_callback = callback
-            self.timeout_callback = timeout_callback
-            self.is_transcribing = True
-            self.streaming_mode = streaming_mode
-            
-            # Clear audio buffer and reset silence detection
-            with self.buffer_lock:
-                self.audio_buffer.clear()
-                self.cumulative_audio.clear()
-            self.last_transcription_time = None
-            self._clear_silence_timer()
-            # Don't start silence timer yet - wait for first transcription
-            
-            # Initialize session timeout
-            self.session_start_time = time.time()
-            self.accumulated_transcription = ""
-            
-            log.info(f"Started transcription session: {session_id}")
-            return True
-            
-        except Exception as e:
-            log.error(f"Failed to start transcription: {e}")
-            self.is_transcribing = False
-            return False
+            try:
+                # Create new transcription session
+                session = TranscriptionSession(
+                    session_id=session_id,
+                    callback=callback,
+                    timeout_callback=timeout_callback,
+                    streaming_mode=streaming_mode,
+                    session_start_time=time.time()
+                )
+                
+                self.active_sessions[session_id] = session
+                log.info(f"Started transcription session: {session_id} (total active: {len(self.active_sessions)})")
+                return True
+                
+            except Exception as e:
+                log.error(f"Failed to start transcription session {session_id}: {e}")
+                return False
 
-    async def stop_transcription(self):
-        """Stop current transcription session"""
-        if not self.is_transcribing:
-            return
-            
-        self.is_transcribing = False
-        self.current_session_id = None
-        self.transcription_callback = None
-        self.timeout_callback = None
-        
-        # Clear audio buffer and silence detection
-        with self.buffer_lock:
-            self.audio_buffer.clear()
-            self.cumulative_audio.clear()
-        self.last_transcription_time = None
-        self._clear_silence_timer()
-        
-        # Clear session timeout
-        self.session_start_time = None
-        self.accumulated_transcription = ""
-        
-        # Shutdown thread pool and create new one to clean up any stuck tasks
-        if hasattr(self, 'audio_thread_pool'):
-            self.audio_thread_pool.shutdown(wait=False)
-            self.audio_thread_pool = ThreadPoolExecutor(
-                max_workers=4,  # Match increased pool size
-                thread_name_prefix="whisper_audio"
-            )
-            
-        log.info("Stopped transcription session")
-
-    async def process_audio_chunk(self, audio_data: bytes) -> bool:
+    async def stop_transcription(self, session_id: str) -> bool:
         """
-        Process incoming audio chunk
+        Stop specific transcription session
         
         Args:
+            session_id: Session ID to stop
+            
+        Returns:
+            True if session was stopped, False if not found
+        """
+        with self.sessions_lock:
+            session = self.active_sessions.pop(session_id, None)
+            if not session:
+                log.warning(f"Transcription session {session_id} not found")
+                return False
+            
+            # Clear session-specific timers
+            self._clear_session_silence_timer(session)
+            
+            log.info(f"Stopped transcription session: {session_id} (remaining active: {len(self.active_sessions)})")
+            return True
+
+    async def process_audio_chunk(self, session_id: str, audio_data: bytes) -> bool:
+        """
+        Process incoming audio chunk for specific session
+        
+        Args:
+            session_id: Session ID to process audio for
             audio_data: WebM/Opus audio data from browser
             
         Returns:
             True if processed successfully
         """
-        if not self.is_transcribing:
-            log.warning("Not transcribing, ignoring audio chunk")
-            return False
+        with self.sessions_lock:
+            session = self.active_sessions.get(session_id)
+            if not session:
+                log.warning(f"Session {session_id} not found, ignoring audio chunk")
+                return False
             
         # Check for session timeout
-        if self._check_session_timeout():
+        if self._check_session_timeout(session):
             return False
             
         try:
-            log.info(f"Received audio chunk: {len(audio_data)} bytes")
+            log.info(f"Received audio chunk for session {session_id}: {len(audio_data)} bytes")
             
-            # Add to buffer
-            with self.buffer_lock:
-                self.audio_buffer.extend(audio_data)
+            # Add to session-specific buffer
+            session.audio_buffer.extend(audio_data)
+            
+            if session.streaming_mode:
+                # Process each chunk for streaming transcription
+                audio_to_process = bytes(session.audio_buffer)
+                session.audio_buffer.clear()
                 
-                if self.streaming_mode:
-                    # Process each chunk for streaming transcription
-                    audio_to_process = bytes(self.audio_buffer)
-                    self.audio_buffer.clear()
+                # Process audio with cumulative context
+                asyncio.create_task(self._process_streaming_audio(session, audio_to_process))
+            else:
+                # In batch mode, accumulate chunks before processing
+                if len(session.audio_buffer) >= 2000:  # ~0.5s of WebM audio
+                    audio_to_process = bytes(session.audio_buffer)
+                    session.audio_buffer.clear()
                     
-                    # Process audio with cumulative context
-                    asyncio.create_task(self._process_streaming_audio(audio_to_process))
-                else:
-                    # In batch mode, accumulate chunks before processing
-                    if len(self.audio_buffer) >= 2000:  # ~0.5s of WebM audio
-                        audio_to_process = bytes(self.audio_buffer)
-                        self.audio_buffer.clear()
-                        
-                        # Process audio in background
-                        asyncio.create_task(self._process_audio_file(audio_to_process, streaming=False))
+                    # Process audio in background
+                    asyncio.create_task(self._process_audio_file(session, audio_to_process, streaming=False))
             
             return True
             
         except Exception as e:
-            log.error(f"Error processing audio chunk: {e}")
+            log.error(f"Error processing audio chunk for session {session_id}: {e}")
             return False
 
-    async def _process_streaming_audio(self, audio_data: bytes):
+    async def _process_streaming_audio(self, session: TranscriptionSession, audio_data: bytes):
         """Process 1-second WebM audio chunk with cumulative context for streaming transcription"""
         try:
-            # Add raw WebM chunk to cumulative buffer (don't convert individual chunks)
-            with self.buffer_lock:
-                self.cumulative_audio.extend(audio_data)
+            # Add raw WebM chunk to session's cumulative buffer (don't convert individual chunks)
+            session.cumulative_audio.extend(audio_data)
+            
+            # Process combined WebM every ~2 seconds worth of data
+            # WebM chunks are ~16KB each, so ~32KB = ~2 seconds
+            if len(session.cumulative_audio) >= 32000:  # ~2 seconds of WebM data
+                log.info(f"Processing combined WebM audio for session {session.session_id}: {len(session.cumulative_audio)} bytes")
                 
-                # Process combined WebM every ~2 seconds worth of data
-                # WebM chunks are ~16KB each, so ~32KB = ~2 seconds
-                if len(self.cumulative_audio) >= 32000:  # ~2 seconds of WebM data
-                    log.info(f"Processing combined WebM audio: {len(self.cumulative_audio)} bytes")
+                # Convert combined WebM to audio array
+                combined_webm = bytes(session.cumulative_audio)
+                audio_array = await self._convert_audio_to_wav(combined_webm)
+                
+                if audio_array is not None:
+                    duration = len(audio_array) / self.sample_rate
+                    log.info(f"Transcribing combined audio for session {session.session_id}: {len(audio_array)} samples, {duration:.1f}s")
                     
-                    # Convert combined WebM to audio array
-                    combined_webm = bytes(self.cumulative_audio)
-                    audio_array = await self._convert_audio_to_wav(combined_webm)
+                    # Process combined audio for transcription
+                    await self._process_audio_async(session, audio_array, streaming=True)
+                else:
+                    log.warning(f"Failed to convert combined WebM audio for session {session.session_id}")
+                
+                # Keep last 15 seconds worth of WebM data (prevent memory issues)
+                max_webm_size = 16000 * 15  # ~15 seconds of WebM chunks
+                if len(session.cumulative_audio) > max_webm_size:
+                    # Keep only the last ~10 seconds of WebM data
+                    keep_size = 16000 * 10  # ~10 seconds
+                    session.cumulative_audio = session.cumulative_audio[-keep_size:]
+                    log.debug(f"Trimmed cumulative WebM buffer to last ~10 seconds for session {session.session_id}")
                     
-                    if audio_array is not None:
-                        duration = len(audio_array) / self.sample_rate
-                        log.info(f"Transcribing combined audio: {len(audio_array)} samples, {duration:.1f}s")
-                        
-                        # Process combined audio for transcription
-                        await self._process_audio_async(audio_array, streaming=True)
-                    else:
-                        log.warning("Failed to convert combined WebM audio")
-                    
-                    # Keep last 15 seconds worth of WebM data (prevent memory issues)
-                    max_webm_size = 16000 * 15  # ~15 seconds of WebM chunks
-                    if len(self.cumulative_audio) > max_webm_size:
-                        # Keep only the last ~10 seconds of WebM data
-                        keep_size = 16000 * 10  # ~10 seconds
-                        self.cumulative_audio = self.cumulative_audio[-keep_size:]
-                        log.debug("Trimmed cumulative WebM buffer to last ~10 seconds")
-                        
         except Exception as e:
-            log.error(f"Error in streaming audio processing: {e}")
+            log.error(f"Error in streaming audio processing for session {session.session_id}: {e}")
 
-    async def _process_audio_file(self, audio_data: bytes, streaming: bool = False):
+    async def _process_audio_file(self, session: TranscriptionSession, audio_data: bytes, streaming: bool = False):
         """Process audio file (WAV/WebM) directly"""
         try:
             # Detect format based on file signature
@@ -301,7 +293,7 @@ class WhisperTranscriptionService:
                         return
                     
                     # Process with Whisper directly
-                    await self._process_audio_async(audio_array, streaming=streaming)
+                    await self._process_audio_async(session, audio_array, streaming=streaming)
                     return
                     
                 except Exception as wav_error:
@@ -314,7 +306,7 @@ class WhisperTranscriptionService:
                 log.warning("FFmpeg conversion failed")
                 return
             
-            await self._process_audio_async(audio_array, streaming=streaming)
+            await self._process_audio_async(session, audio_array, streaming=streaming)
             
         except Exception as e:
             log.error(f"Error processing audio: {e}")
@@ -393,7 +385,7 @@ class WhisperTranscriptionService:
             log.error(f"Error in optimized audio conversion: {e}")
             return None
 
-    async def _process_audio_async(self, audio_array: np.ndarray, streaming: bool = False):
+    async def _process_audio_async(self, session: TranscriptionSession, audio_array: np.ndarray, streaming: bool = False):
         """Process audio data asynchronously using faster-whisper"""
         try:
             # In streaming mode, process even shorter chunks for real-time feedback
@@ -418,19 +410,19 @@ class WhisperTranscriptionService:
                 log.error(f"Error in whisper transcription: {e}")
                 result = None
             
-            if result and self.transcription_callback:
+            if result and session.callback:
                 # Update last transcription time when we get actual text
                 if result.text.strip():
-                    self.last_transcription_time = time.time()
-                    self._reset_silence_timer()
+                    session.last_transcription_time = time.time()
+                    self._reset_session_silence_timer(session)
                     
                     # Accumulate transcription text for timeout handling
-                    if self.accumulated_transcription:
-                        self.accumulated_transcription += " " + result.text.strip()
+                    if session.accumulated_transcription:
+                        session.accumulated_transcription += " " + result.text.strip()
                     else:
-                        self.accumulated_transcription = result.text.strip()
+                        session.accumulated_transcription = result.text.strip()
                 
-                self.transcription_callback(result)
+                session.callback(result)
                 
         except Exception as e:
             log.error(f"Error in async audio processing: {e}")
@@ -493,80 +485,92 @@ class WhisperTranscriptionService:
 
     def get_status(self) -> dict:
         """Get current service status"""
+        with self.sessions_lock:
+            active_session_ids = list(self.active_sessions.keys())
+            
         return {
             "available": self.is_available(),
-            "transcribing": self.is_transcribing,
-            "session_id": self.current_session_id,
+            "active_sessions": active_session_ids,
+            "total_sessions": len(active_session_ids),
             "model_size": self.model_size,
             "language": self.language,
             "sample_rate": self.sample_rate
         }
 
-    def _clear_silence_timer(self):
-        """Clear the silence detection timer"""
-        if self.silence_timer:
-            self.silence_timer.cancel()
-            self.silence_timer = None
+    def _clear_session_silence_timer(self, session: TranscriptionSession):
+        """Clear the silence detection timer for a specific session"""
+        if session.silence_timer:
+            session.silence_timer.cancel()
+            session.silence_timer = None
 
-    def _reset_silence_timer(self):
+    def _reset_session_silence_timer(self, session: TranscriptionSession):
         """Reset the silence timer for auto-stopping transcription"""
-        self._clear_silence_timer()
+        self._clear_session_silence_timer(session)
         
-        if self.is_transcribing:
-            # Start a new timer that will trigger silence handling
-            self.silence_timer = threading.Timer(
-                self.silence_timeout, 
-                self._handle_silence
-            )
-            self.silence_timer.start()
+        # Start a new timer that will trigger silence handling
+        session.silence_timer = threading.Timer(
+            self.silence_timeout, 
+            lambda: self._handle_session_silence(session.session_id)
+        )
+        session.silence_timer.start()
 
-    def _handle_silence(self):
+    def _handle_session_silence(self, session_id: str):
         """Handle silence timeout by auto-stopping transcription"""
-        if self.is_transcribing and self.accumulated_transcription.strip():
-            log.info(f"Silence detected, auto-submitting: '{self.accumulated_transcription[:50]}...'")
-            if self.timeout_callback:
-                self.timeout_callback(self.accumulated_transcription.strip())
-            asyncio.create_task(self.stop_transcription())
-        elif self.is_transcribing:
-            log.info("Silence detected but no text to submit, stopping transcription")
-            asyncio.create_task(self.stop_transcription())
+        with self.sessions_lock:
+            session = self.active_sessions.get(session_id)
+            if not session:
+                return
+            
+        if session.accumulated_transcription.strip():
+            log.info(f"Silence detected for session {session_id}, auto-submitting: '{session.accumulated_transcription[:50]}...'")
+            if session.timeout_callback:
+                session.timeout_callback(session.accumulated_transcription.strip())
+            asyncio.create_task(self.stop_transcription(session_id))
+        else:
+            log.info(f"Silence detected for session {session_id} but no text to submit, stopping transcription")
+            asyncio.create_task(self.stop_transcription(session_id))
 
-    def _check_session_timeout(self) -> bool:
+    def _check_session_timeout(self, session: TranscriptionSession) -> bool:
         """
         Check if the transcription session has exceeded the timeout duration
         
         Returns:
             True if session timed out and was handled, False otherwise
         """
-        if not self.session_start_time:
+        if not session.session_start_time:
             return False
             
-        elapsed_time = time.time() - self.session_start_time
+        elapsed_time = time.time() - session.session_start_time
         if elapsed_time >= self.max_session_duration:
-            log.info(f"Transcription session timed out after {elapsed_time:.1f} seconds")
+            log.info(f"Transcription session {session.session_id} timed out after {elapsed_time:.1f} seconds")
             
             # Trigger timeout callback with accumulated text
-            if self.timeout_callback and self.accumulated_transcription.strip():
-                log.info(f"Auto-submitting accumulated transcription: '{self.accumulated_transcription[:50]}...'")
-                asyncio.create_task(self._handle_timeout())
+            if session.timeout_callback and session.accumulated_transcription.strip():
+                log.info(f"Auto-submitting accumulated transcription for session {session.session_id}: '{session.accumulated_transcription[:50]}...'")
+                asyncio.create_task(self._handle_session_timeout(session.session_id))
             else:
-                log.info("Session timed out but no text to submit")
-                asyncio.create_task(self.stop_transcription())
+                log.info(f"Session {session.session_id} timed out but no text to submit")
+                asyncio.create_task(self.stop_transcription(session.session_id))
             
             return True
         
         return False
 
-    async def _handle_timeout(self):
+    async def _handle_session_timeout(self, session_id: str):
         """Handle session timeout by submitting accumulated text"""
         try:
-            final_text = self.accumulated_transcription.strip()
-            if final_text and self.timeout_callback:
-                self.timeout_callback(final_text)
-            await self.stop_transcription()
+            with self.sessions_lock:
+                session = self.active_sessions.get(session_id)
+                if not session:
+                    return
+                    
+            final_text = session.accumulated_transcription.strip()
+            if final_text and session.timeout_callback:
+                session.timeout_callback(final_text)
+            await self.stop_transcription(session_id)
         except Exception as e:
-            log.error(f"Error handling timeout: {e}")
-            await self.stop_transcription()
+            log.error(f"Error handling timeout for session {session_id}: {e}")
+            await self.stop_transcription(session_id)
 
 
 class AudioProcessor:
