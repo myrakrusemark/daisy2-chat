@@ -29,6 +29,11 @@ COPY config/ ./config/
 COPY data/ ./data/
 COPY models/ ./models/
 
+# Copy test infrastructure
+COPY tests/ ./tests/
+COPY scripts/ ./scripts/
+COPY jest.config.js playwright.config.js .eslintrc.js ./
+
 # Create necessary directories
 RUN mkdir -p /app/data/conversations
 
