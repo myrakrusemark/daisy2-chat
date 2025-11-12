@@ -32,7 +32,6 @@ docs/
 !README.md
 
 # Tests
-tests/
 .pytest_cache/
 
 # Docker
@@ -41,7 +40,6 @@ Dockerfile
 docker-compose.yml
 
 # CI/CD
-.github/
 .gitlab-ci.yml
 
 # Local development
