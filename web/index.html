@@ -196,6 +196,86 @@
 
                     <div class="divider my-2"></div>
 
+                    <!-- Wake Word Tuning -->
+                    <div class="space-y-3">
+                        <div class="flex items-center gap-2 mb-3">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4" />
+                            </svg>
+                            <span class="font-semibold text-sm">Wake Word Tuning</span>
+                        </div>
+
+                        <!-- Detection Threshold -->
+                        <div class="form-control">
+                            <label class="label py-1">
+                                <span class="label-text text-xs">Detection Threshold</span>
+                                <span class="label-text-alt text-xs" id="threshold-display">0.50</span>
+                            </label>
+                            <input type="range" id="detection-threshold" min="0.1" max="0.8" value="0.5" step="0.05" class="range range-xs range-primary" />
+                            <div class="w-full flex justify-between text-xs px-2 opacity-60">
+                                <span>Sensitive</span>
+                                <span>Strict</span>
+                            </div>
+                        </div>
+
+                        <!-- Input Gain -->
+                        <div class="form-control">
+                            <label class="label py-1">
+                                <span class="label-text text-xs">Input Gain</span>
+                                <span class="label-text-alt text-xs" id="input-gain-display">100%</span>
+                            </label>
+                            <input type="range" id="input-gain" min="0.5" max="3.0" value="1.0" step="0.1" class="range range-xs range-primary" />
+                            <div class="w-full flex justify-between text-xs px-2 opacity-60">
+                                <span>50%</span>
+                                <span>300%</span>
+                            </div>
+                        </div>
+
+                        <!-- VAD Sensitivity -->
+                        <div class="form-control">
+                            <label class="label py-1">
+                                <span class="label-text text-xs">VAD Sensitivity</span>
+                                <span class="label-text-alt text-xs" id="vad-sensitivity-display">0.50</span>
+                            </label>
+                            <input type="range" id="vad-sensitivity" min="0.2" max="0.8" value="0.5" step="0.05" class="range range-xs range-primary" />
+                            <div class="w-full flex justify-between text-xs px-2 opacity-60">
+                                <span>High</span>
+                                <span>Low</span>
+                            </div>
+                        </div>
+
+                        <!-- VAD Hangover -->
+                        <div class="form-control">
+                            <label class="label py-1">
+                                <span class="label-text text-xs">VAD Hangover</span>
+                                <span class="label-text-alt text-xs" id="vad-hangover-display">12 frames</span>
+                            </label>
+                            <input type="range" id="vad-hangover" min="5" max="25" value="12" step="1" class="range range-xs range-primary" />
+                            <div class="w-full flex justify-between text-xs px-2 opacity-60">
+                                <span>Quick</span>
+                                <span>Slow</span>
+                            </div>
+                        </div>
+
+                        <!-- Save Button -->
+                        <div class="flex gap-2 pt-2">
+                            <button id="btn-apply-tuning" class="btn btn-primary btn-xs flex-1">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                </svg>
+                                Apply
+                            </button>
+                            <button id="btn-reset-tuning" class="btn btn-ghost btn-xs">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                </svg>
+                                Reset
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="divider my-2"></div>
+
                     <!-- Session Management -->
                     <div class="space-y-2">
                         <button id="btn-new-session" class="btn btn-outline btn-sm w-full">

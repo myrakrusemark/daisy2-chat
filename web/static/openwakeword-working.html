@@ -162,10 +162,49 @@
             <button id="test-button" disabled>Test from WAV</button>
         </div>
 
-        <div class="control-group">
-            <label for="gain-slider">Input Gain:</label>
-            <input type="range" id="gain-slider" min="0" max="5" value="1" step="0.1">
-            <span id="gain-value">100%</span>
+        <!-- Tuning Controls -->
+        <div style="background: #f0f0f0; padding: 20px; border-radius: 8px; margin: 20px 0;">
+            <h3 style="margin-top: 0; color: #333; text-align: center;">🎛️ Wake Word Tuning Controls</h3>
+            
+            <div class="control-group">
+                <label for="threshold-slider">Detection Threshold:</label>
+                <input type="range" id="threshold-slider" min="0.1" max="0.8" value="0.5" step="0.05">
+                <span id="threshold-value">0.50</span>
+                <small style="display: block; color: #666;">Lower = more sensitive (may trigger falsely), Higher = less sensitive</small>
+            </div>
+
+            <div class="control-group">
+                <label for="gain-slider">Input Gain:</label>
+                <input type="range" id="gain-slider" min="0" max="5" value="1" step="0.1">
+                <span id="gain-value">100%</span>
+                <small style="display: block; color: #666;">Audio amplification multiplier</small>
+            </div>
+
+            <div class="control-group">
+                <label for="vad-threshold-slider">VAD Sensitivity:</label>
+                <input type="range" id="vad-threshold-slider" min="0.2" max="0.8" value="0.5" step="0.05">
+                <span id="vad-threshold-value">0.50</span>
+                <small style="display: block; color: #666;">Voice Activity Detection sensitivity</small>
+            </div>
+
+            <div class="control-group">
+                <label for="hangover-slider">VAD Hangover Frames:</label>
+                <input type="range" id="hangover-slider" min="5" max="25" value="12" step="1">
+                <span id="hangover-value">12 (~150ms)</span>
+                <small style="display: block; color: #666;">How long speech detection persists after silence</small>
+            </div>
+
+            <div class="control-group">
+                <label for="cooldown-slider">Detection Cooldown:</label>
+                <input type="range" id="cooldown-slider" min="1000" max="5000" value="2000" step="250">
+                <span id="cooldown-value">2000ms</span>
+                <small style="display: block; color: #666;">Delay between repeated detections</small>
+            </div>
+
+            <div class="control-group">
+                <button id="reset-defaults" style="background: #666; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer;">Reset to Defaults</button>
+                <button id="save-settings" style="background: #2196f3; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; margin-left: 10px;">Save Settings</button>
+            </div>
         </div>
 
         <p style="text-align: center;">Status: <span id="vad-status">●</span> <span id="status-text">...</span></p>
@@ -214,10 +253,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const frameSize = 1280; // 80ms chunk size
 
     // --- VAD & Utterance Management ---
-    const VAD_HANGOVER_FRAMES = 12; // Increased from 8 to 12
+    let VAD_HANGOVER_FRAMES = 12; // Tunable - frames to wait after speech ends
     let vadHangoverCounter = 0;
     let isSpeechActive = false;
     let utteranceBuffer = [];
+    
+    // --- Tuning Parameters ---
+    let detectionThreshold = 0.5;        // Wake word confidence threshold
+    let vadThreshold = 0.5;              // Voice activity detection threshold  
+    let detectionCooldownMs = 2000;      // Cooldown between detections
 
     // --- Pipeline Buffers & State ---
     let mel_buffer = [];
@@ -348,7 +392,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const sr = new ort.Tensor('int64', [BigInt(sampleRate)], []);
             const res = await vadModel.run({ input: tensor, sr: sr, h: vadState.h, c: vadState.c });
             vadState.h = res.hn; vadState.c = res.cn;
-            return res.output.data[0] > 0.5;
+            return res.output.data[0] > vadThreshold; // Use tunable threshold
         } catch (err) { console.error("VAD Error:", err); return false; }
     }
 
@@ -393,16 +437,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 models[name].scores.shift();
                 models[name].scores.push(score);
 
-                if (score > 0.5 && isSpeechConsideredActive && !isDetectionCoolingDown) {
+                if (score > detectionThreshold && isSpeechConsideredActive && !isDetectionCoolingDown) {
                     isDetectionCoolingDown = true;
                     if (successSound) successSound.play();
 
                     if (detectionFadeTimer) clearTimeout(detectionFadeTimer);
-                    detectionText.textContent = `Detected: ${name} (Score: ${score.toFixed(2)})`;
+                    detectionText.textContent = `Detected: ${name} (Score: ${score.toFixed(2)}, Threshold: ${detectionThreshold.toFixed(2)})`;
                     detectionText.classList.remove('fading');
                     detectionFadeTimer = setTimeout(() => { detectionText.classList.add('fading'); }, 1000);
 
-                    setTimeout(() => { isDetectionCoolingDown = false; }, 2000); // 2-second cooldown
+                    setTimeout(() => { isDetectionCoolingDown = false; }, detectionCooldownMs); // Tunable cooldown
                 }
             }
             
@@ -520,6 +564,9 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) { console.error("Could not populate microphone list:", e); statusText.textContent = "Error: Could not access microphones."; }
     }
 
+    // --- Tuning Control Event Listeners ---
+    
+    // Input gain control
     gainSlider.addEventListener('input', () => {
         const gainLevel = parseFloat(gainSlider.value);
         if (gainNode) {
@@ -527,6 +574,141 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         gainValue.textContent = `${Math.round(gainLevel * 100)}%`;
     });
+    
+    // Detection threshold control
+    const thresholdSlider = document.getElementById('threshold-slider');
+    const thresholdValue = document.getElementById('threshold-value');
+    thresholdSlider.addEventListener('input', () => {
+        detectionThreshold = parseFloat(thresholdSlider.value);
+        thresholdValue.textContent = detectionThreshold.toFixed(2);
+        console.log(`Detection threshold updated to: ${detectionThreshold}`);
+    });
+    
+    // VAD threshold control
+    const vadThresholdSlider = document.getElementById('vad-threshold-slider');
+    const vadThresholdValueEl = document.getElementById('vad-threshold-value');
+    vadThresholdSlider.addEventListener('input', () => {
+        vadThreshold = parseFloat(vadThresholdSlider.value);
+        vadThresholdValueEl.textContent = vadThreshold.toFixed(2);
+        console.log(`VAD threshold updated to: ${vadThreshold}`);
+    });
+    
+    // VAD hangover frames control
+    const hangoverSlider = document.getElementById('hangover-slider');
+    const hangoverValueEl = document.getElementById('hangover-value');
+    hangoverSlider.addEventListener('input', () => {
+        VAD_HANGOVER_FRAMES = parseInt(hangoverSlider.value);
+        const timeMs = Math.round(VAD_HANGOVER_FRAMES * 12.5); // ~12.5ms per frame
+        hangoverValueEl.textContent = `${VAD_HANGOVER_FRAMES} (~${timeMs}ms)`;
+        console.log(`VAD hangover frames updated to: ${VAD_HANGOVER_FRAMES}`);
+    });
+    
+    // Detection cooldown control
+    const cooldownSlider = document.getElementById('cooldown-slider');
+    const cooldownValueEl = document.getElementById('cooldown-value');
+    cooldownSlider.addEventListener('input', () => {
+        detectionCooldownMs = parseInt(cooldownSlider.value);
+        cooldownValueEl.textContent = `${detectionCooldownMs}ms`;
+        console.log(`Detection cooldown updated to: ${detectionCooldownMs}ms`);
+    });
+    
+    // Reset to defaults button
+    const resetButton = document.getElementById('reset-defaults');
+    resetButton.addEventListener('click', () => {
+        // Reset all sliders to default values
+        thresholdSlider.value = '0.5';
+        detectionThreshold = 0.5;
+        thresholdValue.textContent = '0.50';
+        
+        gainSlider.value = '1';
+        if (gainNode) gainNode.gain.value = 1;
+        gainValue.textContent = '100%';
+        
+        vadThresholdSlider.value = '0.5';
+        vadThreshold = 0.5;
+        vadThresholdValueEl.textContent = '0.50';
+        
+        hangoverSlider.value = '12';
+        VAD_HANGOVER_FRAMES = 12;
+        hangoverValueEl.textContent = '12 (~150ms)';
+        
+        cooldownSlider.value = '2000';
+        detectionCooldownMs = 2000;
+        cooldownValueEl.textContent = '2000ms';
+        
+        console.log('🔄 Reset all tuning parameters to defaults');
+    });
+    
+    // Save settings button
+    const saveButton = document.getElementById('save-settings');
+    saveButton.addEventListener('click', () => {
+        const settings = {
+            detectionThreshold,
+            vadThreshold,
+            VAD_HANGOVER_FRAMES,
+            detectionCooldownMs,
+            inputGain: parseFloat(gainSlider.value)
+        };
+        
+        localStorage.setItem('heyDaisyTuningSettings', JSON.stringify(settings));
+        
+        // Show temporary feedback
+        const originalText = saveButton.textContent;
+        saveButton.textContent = '✅ Saved!';
+        saveButton.style.background = '#4caf50';
+        setTimeout(() => {
+            saveButton.textContent = originalText;
+            saveButton.style.background = '#2196f3';
+        }, 2000);
+        
+        console.log('💾 Settings saved:', settings);
+    });
+    
+    // Load saved settings on page load
+    function loadSavedSettings() {
+        const saved = localStorage.getItem('heyDaisyTuningSettings');
+        if (saved) {
+            try {
+                const settings = JSON.parse(saved);
+                
+                if (settings.detectionThreshold !== undefined) {
+                    thresholdSlider.value = settings.detectionThreshold;
+                    detectionThreshold = settings.detectionThreshold;
+                    thresholdValue.textContent = detectionThreshold.toFixed(2);
+                }
+                
+                if (settings.vadThreshold !== undefined) {
+                    vadThresholdSlider.value = settings.vadThreshold;
+                    vadThreshold = settings.vadThreshold;
+                    vadThresholdValueEl.textContent = vadThreshold.toFixed(2);
+                }
+                
+                if (settings.VAD_HANGOVER_FRAMES !== undefined) {
+                    hangoverSlider.value = settings.VAD_HANGOVER_FRAMES;
+                    VAD_HANGOVER_FRAMES = settings.VAD_HANGOVER_FRAMES;
+                    hangoverValueEl.textContent = `${VAD_HANGOVER_FRAMES} (~${Math.round(VAD_HANGOVER_FRAMES * 12.5)}ms)`;
+                }
+                
+                if (settings.detectionCooldownMs !== undefined) {
+                    cooldownSlider.value = settings.detectionCooldownMs;
+                    detectionCooldownMs = settings.detectionCooldownMs;
+                    cooldownValueEl.textContent = `${detectionCooldownMs}ms`;
+                }
+                
+                if (settings.inputGain !== undefined) {
+                    gainSlider.value = settings.inputGain;
+                    gainValue.textContent = `${Math.round(settings.inputGain * 100)}%`;
+                }
+                
+                console.log('📂 Loaded saved settings:', settings);
+            } catch (e) {
+                console.error('Failed to load saved settings:', e);
+            }
+        }
+    }
+    
+    // Load saved settings after controls are available
+    loadSavedSettings();
 
     startButton.addEventListener('click', () => { if (isListening) { stopListening(); } else { startListening(); } });
     testButton.addEventListener('click', () => { statusText.textContent = 'Test from WAV not implemented yet'; });

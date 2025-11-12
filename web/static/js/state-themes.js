@@ -3,53 +3,53 @@
 // State colors are defined in CSS variables (see src/css/input.css)
 
 export const STATE_THEMES = {
-    idle: {
-        name: 'Idle',
-        emoji: '🌙',
-        status: 'Ready to assist',
-        cssVariable: '--state-idle',  // Reference to CSS variable
-        animation: null
-    },
+  idle: {
+    name: 'Idle',
+    emoji: '🌙',
+    status: 'Ready to assist',
+    cssVariable: '--state-idle',  // Reference to CSS variable
+    animation: null
+  },
 
-    listening: {
-        name: 'Listening',
-        emoji: '🎤',
-        status: '🎤 Listening...',
-        cssVariable: '--state-listening',
-        animation: 'pulse-glow'
-    },
+  listening: {
+    name: 'Listening',
+    emoji: '🎤',
+    status: '🎤 Listening...',
+    cssVariable: '--state-listening',
+    animation: 'pulse-glow'
+  },
 
-    processing: {
-        name: 'Processing',
-        emoji: '⚙️',
-        status: '⏳ Processing...',
-        cssVariable: '--state-processing',
-        animation: null
-    },
+  processing: {
+    name: 'Processing',
+    emoji: '⚙️',
+    status: '⏳ Processing...',
+    cssVariable: '--state-processing',
+    animation: null
+  },
 
-    speaking: {
-        name: 'Speaking',
-        emoji: '💬',
-        status: '💬 Responding...',
-        cssVariable: '--state-speaking',
-        animation: null
-    },
+  speaking: {
+    name: 'Speaking',
+    emoji: '💬',
+    status: '💬 Responding...',
+    cssVariable: '--state-speaking',
+    animation: null
+  },
 
-    connecting: {
-        name: 'Connecting',
-        emoji: '🔗',
-        status: '🔗 Connecting...',
-        cssVariable: '--state-connecting',
-        animation: 'pulse-glow'
-    },
+  connecting: {
+    name: 'Connecting',
+    emoji: '🔗',
+    status: '🔗 Connecting...',
+    cssVariable: '--state-connecting',
+    animation: 'pulse-glow'
+  },
 
-    error: {
-        name: 'Error',
-        emoji: '❌',
-        status: '❌ Error occurred',
-        cssVariable: '--state-error',
-        animation: null
-    }
+  error: {
+    name: 'Error',
+    emoji: '❌',
+    status: '❌ Error occurred',
+    cssVariable: '--state-error',
+    animation: null
+  }
 };
 
 // Get ordered list of state keys
@@ -57,59 +57,59 @@ export const STATE_ORDER = Object.keys(STATE_THEMES);
 
 // Helper to apply state
 export function applyState(stateName) {
-    const theme = STATE_THEMES[stateName];
-    if (!theme) {
-        console.warn(`Unknown state: ${stateName}`);
-        return;
+  const theme = STATE_THEMES[stateName];
+  if (!theme) {
+    console.warn(`Unknown state: ${stateName}`);
+    return;
+  }
+
+  // Remove all state classes
+  STATE_ORDER.forEach(state => {
+    document.body.classList.remove(`state-${state}`);
+  });
+
+  // Add new state class
+  document.body.classList.add(`state-${stateName}`);
+
+  // Update data attribute for reference
+  document.body.setAttribute('data-state', stateName);
+
+  // Update status text if element exists
+  const statusDisplay = document.getElementById('status-display');
+  if (statusDisplay) {
+    // For idle state, check wake word toggle
+    if (stateName === 'idle') {
+      const wakeWordToggle = document.getElementById('wake-word-toggle');
+      if (wakeWordToggle && wakeWordToggle.checked) {
+        statusDisplay.textContent = window.CLAUDE_CONSTANTS.WAKE_WORD_LISTENING_MESSAGE();
+      } else {
+        statusDisplay.textContent = window.CLAUDE_CONSTANTS.READY_MESSAGE;
+      }
+    } else {
+      statusDisplay.textContent = theme.status;
     }
+  }
 
-    // Remove all state classes
-    STATE_ORDER.forEach(state => {
-        document.body.classList.remove(`state-${state}`);
-    });
-
-    // Add new state class
-    document.body.classList.add(`state-${stateName}`);
-
-    // Update data attribute for reference
-    document.body.setAttribute('data-state', stateName);
-
-    // Update status text if element exists
-    const statusDisplay = document.getElementById('status-display');
-    if (statusDisplay) {
-        // For idle state, check wake word toggle
-        if (stateName === 'idle') {
-            const wakeWordToggle = document.getElementById('wake-word-toggle');
-            if (wakeWordToggle && wakeWordToggle.checked) {
-                statusDisplay.textContent = window.CLAUDE_CONSTANTS.WAKE_WORD_LISTENING_MESSAGE();
-            } else {
-                statusDisplay.textContent = window.CLAUDE_CONSTANTS.READY_MESSAGE;
-            }
-        } else {
-            statusDisplay.textContent = theme.status;
-        }
+  // Show/hide stop button based on state (using visibility to prevent layout shift)
+  const stopBtn = document.getElementById('btn-stop');
+  if (stopBtn) {
+    const stoppableStates = ['listening', 'processing', 'speaking'];
+    if (stoppableStates.includes(stateName)) {
+      stopBtn.style.visibility = 'visible';
+    } else {
+      stopBtn.style.visibility = 'hidden';
     }
+  }
 
-    // Show/hide stop button based on state (using visibility to prevent layout shift)
-    const stopBtn = document.getElementById('btn-stop');
-    if (stopBtn) {
-        const stoppableStates = ['listening', 'processing', 'speaking'];
-        if (stoppableStates.includes(stateName)) {
-            stopBtn.style.visibility = 'visible';
-        } else {
-            stopBtn.style.visibility = 'hidden';
-        }
+  // Show/hide live transcription bubble in listening mode
+  const liveTranscription = document.getElementById('live-transcription');
+  if (liveTranscription) {
+    if (stateName === 'listening') {
+      liveTranscription.style.display = '';
+    } else {
+      liveTranscription.style.display = 'none';
     }
+  }
 
-    // Show/hide live transcription bubble in listening mode
-    const liveTranscription = document.getElementById('live-transcription');
-    if (liveTranscription) {
-        if (stateName === 'listening') {
-            liveTranscription.style.display = '';
-        } else {
-            liveTranscription.style.display = 'none';
-        }
-    }
-
-    console.log(`✓ State changed to: ${theme.name}`);
+  console.log(`✓ State changed to: ${theme.name}`);
 }
