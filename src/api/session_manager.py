@@ -154,7 +154,7 @@ class SessionManager:
         # Check session limit
         if len(self.sessions) >= self.max_sessions:
             # Try to cleanup old sessions
-            self._cleanup_inactive_sessions()
+            await self._cleanup_inactive_sessions()
             if len(self.sessions) >= self.max_sessions:
                 # Remove oldest session to make room
                 oldest_session_id = min(self.sessions.keys(), 

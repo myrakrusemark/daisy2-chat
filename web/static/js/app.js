@@ -272,6 +272,12 @@ class ClaudeAssistant {
   checkCompatibility() {
     const compat = window.AudioManager.checkCompatibility();
 
+    // Skip browser compatibility warnings if Android app is detected
+    if (this.isAndroidApp) {
+      console.log('Android app detected - skipping browser compatibility checks');
+      return;
+    }
+
     // With server-side Whisper transcription, browser compatibility issues are much less critical
     // Only show warnings for truly unsupported browsers or missing essential features
     if (!compat.supported && compat.critical) {
