@@ -2,12 +2,10 @@ import { applyState } from './state-themes.js';
 
 // Import constants from global constants file
 const { 
-  WAKE_WORD, 
-  WAKE_WORD_DISPLAY, 
+  DEFAULT_KEYWORDS,
+  KEYWORD_DISPLAY, 
   READY_MESSAGE, 
-  WAKE_WORD_LISTENING_MESSAGE, 
-  WAKE_WORD_RESUME_DELAY, 
-  WAKE_WORD_RESTART_DELAY,
+  VAD_LISTENING_MESSAGE, 
   STT_ENGINES,
   STT_ENGINE_NAMES,
   DEFAULT_STT_ENGINE 
@@ -21,7 +19,7 @@ class ClaudeAssistant {
     this.healthMonitor = new window.HealthMonitor();
     this.ws = null;
     this.sessionId = null;
-    this.wakeWord = null;
+    // VAD is now integrated into audio manager
 
     // Activation mode state
     this.activationMode = null; // 'push-to-talk', 'click-to-activate', 'wake-word'
@@ -51,8 +49,7 @@ class ClaudeAssistant {
     // Check server transcription availability (will be set when WebSocket connects)
     this.serverTranscriptionAvailable = false;
         
-    // Track if wake word was paused for processing (to prevent Bluetooth interference)
-    this.wakeWordWasPausedForProcessing = false;
+    // VAD is always-on, no need to pause/resume
   }
 
   /**
@@ -151,11 +148,10 @@ class ClaudeAssistant {
       if (hangoverDisplay) {hangoverDisplay.textContent = `${vadHangover} frames`;}
     }
 
-    // Store current values for wake word manager
-    this.wakeWordTuning = {
-      detectionThreshold,
-      inputGain,
+    // Store current values for VAD tuning
+    this.vadTuning = {
       vadSensitivity,
+      inputGain,
       vadHangover
     };
   }
@@ -171,7 +167,7 @@ class ClaudeAssistant {
     this.setCookie('wakeWordVadSensitivity', settings.vadSensitivity);
     this.setCookie('wakeWordVadHangover', settings.vadHangover);
 
-    this.wakeWordTuning = settings;
+    this.vadTuning = settings;
         
     console.log('Wake word tuning settings saved:', settings);
   }
@@ -194,14 +190,18 @@ class ClaudeAssistant {
   }
 
   /**
-     * Apply wake word tuning settings to active wake word manager
+     * Apply VAD tuning settings to active VAD service
      */
-  applyWakeWordTuning() {
-    if (this.wakeWord) {
+  applyVADTuning() {
+    if (this.audio && this.audio.vadService) {
       const settings = this.getWakeWordTuningValues();
             
-      // Apply settings to the wake word manager
-      this.wakeWord.updateTuningSettings(settings);
+      // Apply settings to the VAD service
+      this.audio.vadService.updateSettings({
+        vadThreshold: settings.vadSensitivity,
+        inputGain: settings.inputGain,
+        vadHangoverFrames: settings.vadHangover
+      });
             
       // Save to cookies
       this.saveWakeWordTuningSettings();
@@ -361,7 +361,7 @@ class ClaudeAssistant {
       // Start wake word mode if checkbox is checked
       const wakeWordToggle = document.getElementById('wake-word-toggle');
       if (wakeWordToggle && wakeWordToggle.checked) {
-        this.startWakeWord();
+        this.startVADListening();
       }
     };
 
@@ -374,8 +374,8 @@ class ClaudeAssistant {
       this.isListening = false;
             
       // Stop wake word if running
-      if (this.wakeWord && this.wakeWord.getIsListening()) {
-        this.wakeWord.stopListening();
+      if (this.activationMode === 'vad-continuous') {
+        await this.stopVADListening();
       }
             
       // Clear any UI states
@@ -483,7 +483,7 @@ class ClaudeAssistant {
       this.isProcessing = false;
             
       // Resume wake word detection on error
-      this.resumeWakeWordAfterProcessing();
+      this.resumeVADAfterProcessing();
     };
 
     // TTS streaming callbacks
@@ -521,7 +521,7 @@ class ClaudeAssistant {
           this.audio.playSound('sleep');
                     
           // Resume wake word detection now that TTS is complete
-          this.resumeWakeWordAfterProcessing();
+          this.resumeVADAfterProcessing();
         } else {
           // Reset flag for next TTS and return to processing state
           // (Claude is still working on the full response)
@@ -689,10 +689,10 @@ class ClaudeAssistant {
             
       if (e.target.checked) {
         // Start wake word mode
-        this.startWakeWord();
+        this.startVADListening();
       } else {
         // Stop wake word mode
-        this.stopWakeWord();
+        this.stopVADListening();
       }
     });
 
@@ -801,8 +801,13 @@ class ClaudeAssistant {
 
     if (mode === 'push-to-talk') {
       document.getElementById('btn-push-to-talk').classList.add('active');
+    } else if (mode === 'vad-continuous') {
+      // VAD mode is always active when enabled via checkbox
+      const vadToggle = document.getElementById('wake-word-toggle');
+      if (vadToggle) {
+        vadToggle.classList.add('active');
+      }
     }
-    // Wake word mode is handled by the checkbox state
   }
 
   /**
@@ -832,10 +837,7 @@ class ClaudeAssistant {
   startListening() {
     if (this.isListening) {return;}
 
-    // Temporarily pause wake word detection if it's running
-    if (this.wakeWord && this.wakeWord.getIsListening()) {
-      this.wakeWord.stopListening();
-    }
+    // VAD is always listening, no need to pause/resume
 
     const success = this.audio.startListening(this.activationMode, this.ws);
     if (success) {
@@ -874,13 +876,7 @@ class ClaudeAssistant {
       this.ui.setStatus(READY_MESSAGE);
     }
 
-    // Resume wake word detection if wake word toggle is checked
-    const wakeWordToggle = document.getElementById('wake-word-toggle');
-    if (wakeWordToggle && wakeWordToggle.checked && this.wakeWord && !this.wakeWord.getIsListening()) {
-      setTimeout(() => {
-        this.wakeWord.startListening();
-      }, WAKE_WORD_RESUME_DELAY);
-    }
+    // VAD is always listening, no need to resume
   }
 
   /**
@@ -944,14 +940,10 @@ class ClaudeAssistant {
       break;
     }
 
-    // Return to idle state or wake word mode
-    if (this.activationMode === 'wake-word' && this.wakeWord) {
-      // Restart wake word listening
-      this.wakeWord.stopListening();
-      setTimeout(() => {
-        this.wakeWord.startListening();
-        this.ui.setStatus(WAKE_WORD_LISTENING_MESSAGE());
-      }, WAKE_WORD_RESUME_DELAY);
+    // Return to idle state - VAD continues listening
+    if (this.activationMode === 'vad-continuous') {
+      // VAD continues running, just update status
+      this.ui.setStatus(VAD_LISTENING_MESSAGE());
       applyState('idle');
     } else {
       // Clear activation mode and return to idle
@@ -962,9 +954,6 @@ class ClaudeAssistant {
       applyState('idle');
       this.ui.setStatus(READY_MESSAGE);
     }
-        
-    // Resume wake word if it was paused for processing
-    this.resumeWakeWordAfterProcessing();
 
     // Play sleep sound
     this.audio.playSound('sleep');
@@ -999,64 +988,42 @@ class ClaudeAssistant {
 
 
   /**
-     * Start wake word detection
+     * Start always-on VAD listening with keyword detection
      */
-  async startWakeWord() {
-    this.setActivationMode('wake-word');
+  async startVADListening() {
+    this.setActivationMode('vad-continuous');
 
-    // Initialize wake word manager if not already done
-    if (!this.wakeWord) {
-      this.wakeWord = new window.WakeWordManager();
-
-      // Set up callbacks
-      this.wakeWord.onWakeWordDetected = (data) => {
-        console.log('Wake word detected!', data);
-        this.audio.playSound('wakeWord');
-        this.ui.setStatus(`Wake word "${data.wakeWord}" detected! Listening for command...`);
-
-        // Temporarily stop wake word listening
-        this.wakeWord.stopListening();
-
-        // Set mode to wake-word and start listening for the command
-        this.setActivationMode('wake-word');
-        this.startListening();
-      };
-
-      this.wakeWord.onError = (error) => {
-        console.error('Wake word error:', error);
-        this.ui.setStatus(`Wake word error: ${error}`, 'error');
-      };
-            
-      // Set up VAD callback for visual feedback
-      this.wakeWord.onVadStateChanged = (vadState) => {
-        this.updatePushToTalkButtonVadState(vadState);
-      };
-
-      this.wakeWord.onReady = (data) => {
-        console.log('Wake word ready:', data);
-        this.ui.setStatus(`Listening for wake word: "${data.wakeWord}"`);
-      };
-
-      this.wakeWord.onStatusChange = (data) => {
-        console.log('Wake word status change:', data);
-        this.ui.setStatus(data.message);
-      };
-
-      await this.wakeWord.initialize(WAKE_WORD);
+    // Initialize audio manager VAD service
+    const vadInitialized = await this.audio.initializeVADListening();
+    if (!vadInitialized) {
+      this.ui.setStatus('Failed to initialize VAD listening', 'error');
+      return;
     }
 
-    // Start listening for wake word
-    this.wakeWord.startListening();
-    this.ui.setStatus(WAKE_WORD_LISTENING_MESSAGE());
+    // Set up VAD callbacks for visual feedback
+    this.audio.onVadStateChanged = (vadState) => {
+      this.updatePushToTalkButtonVadState(vadState);
+    };
+
+    this.audio.onRecordingStart = () => {
+      console.log('VAD triggered recording start');
+      this.ui.setStatus('🎙️ Recording... (say "hey daisy" followed by your command)');
+    };
+
+    this.audio.onRecordingStop = () => {
+      console.log('VAD triggered recording stop');
+      this.ui.setStatus('🔄 Processing audio...');
+    };
+
+    this.ui.setStatus(VAD_LISTENING_MESSAGE());
+    console.log('✓ Always-on VAD listening started');
   }
 
   /**
-     * Stop wake word detection
+     * Stop VAD listening
      */
-  stopWakeWord() {
-    if (this.wakeWord) {
-      this.wakeWord.stopListening();
-    }
+  async stopVADListening() {
+    await this.audio.stopVADListening();
 
     // Clear VAD visual state
     const pttBtn = document.getElementById('btn-push-to-talk');
@@ -1065,7 +1032,7 @@ class ClaudeAssistant {
     }
 
     this.activationMode = null;
-    this.ui.setStatus('Wake word detection stopped');
+    this.ui.setStatus('VAD listening stopped');
 
     // Play sleep sound
     this.audio.playSound('sleep');
@@ -1209,35 +1176,20 @@ class ClaudeAssistant {
       console.log('Marking wake word as paused for processing to prevent Bluetooth audio interference');
             
       // Stop if currently listening
-      if (this.wakeWord && this.wakeWord.getIsListening()) {
-        this.wakeWord.stopListening();
+      if (this.activationMode === 'vad-continuous') {
+        await this.stopVADListening();
       }
             
-      this.wakeWordWasPausedForProcessing = true;
+      // VAD continues listening during processing
     }
   }
 
   /**
-     * Resume wake word detection after processing is complete
+     * VAD continues listening - no need to resume
      */
-  resumeWakeWordAfterProcessing() {
-    // Only resume if wake word was actually paused for processing and wake word mode is still enabled
-    const wakeWordToggle = document.getElementById('wake-word-toggle');
-    if (this.wakeWordWasPausedForProcessing && 
-            wakeWordToggle && 
-            wakeWordToggle.checked && 
-            this.wakeWord && 
-            !this.wakeWord.getIsListening()) {
-            
-      console.log('Resuming wake word detection after processing complete');
-      setTimeout(() => {
-        if (this.wakeWord) {
-          this.wakeWord.startListening();
-          this.ui.setStatus(WAKE_WORD_LISTENING_MESSAGE());
-        }
-        this.wakeWordWasPausedForProcessing = false;
-      }, WAKE_WORD_RESUME_DELAY);
-    }
+  resumeVADAfterProcessing() {
+    // VAD is always listening, no action needed
+    console.log('VAD continues listening - no resume needed');
   }
 
   /**

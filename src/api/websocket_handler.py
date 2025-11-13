@@ -359,8 +359,8 @@ class WebSocketHandler:
             log.error(f"Error updating config: {e}")
             await self.send_error(f"Failed to update configuration: {str(e)}")
 
-    async def handle_start_server_transcription(self, streaming_mode: bool = True):
-        """Start server-side transcription after wake word detection"""
+    async def handle_start_server_transcription(self):
+        """Start server-side transcription session for complete file processing"""
         if not self.whisper_available:
             log.warning("Whisper transcription not available, falling back to browser STT")
             await self.send_message({
@@ -374,38 +374,38 @@ class WebSocketHandler:
             transcription_session_id = f"{self.session.session_id}_{int(asyncio.get_event_loop().time())}"
             self.current_transcription_session_id = transcription_session_id
             
-            # Set up transcription callback
+            # Set up transcription callback with keyword detection
             def on_transcription_result(result: TranscriptionResult):
-                # Send transcription result to browser asynchronously
-                # Use asyncio.create_task to avoid blocking the whisper processing
                 try:
                     loop = asyncio.get_event_loop()
+                    
+                    # Check if keyword was found
+                    if result.keyword_found:
+                        log.info(f"✓ Keyword '{result.keyword_matched}' detected in server transcription")
+                        # Submit the command part only
+                        command_text = result.command_text if result.command_text.strip() else result.text
+                        loop.create_task(self.handle_user_message(command_text))
+                    else:
+                        log.info(f"No keywords found in server transcription, discarding: '{result.text[:50]}...'")
+                    
+                    # Also send the result to browser for debugging/feedback
                     loop.create_task(self.send_message({
                         "type": "server_transcription_result",
                         "text": result.text,
                         "is_final": result.is_final,
                         "confidence": result.confidence,
-                        "language": result.language
+                        "language": result.language,
+                        "keyword_found": result.keyword_found,
+                        "keyword_matched": result.keyword_matched,
+                        "command_text": result.command_text
                     }))
                 except Exception as e:
-                    log.error(f"Error sending transcription result: {e}")
+                    log.error(f"Error handling transcription result: {e}")
             
-            # Set up timeout callback for auto-submission
-            def on_timeout(accumulated_text: str):
-                # Auto-submit the accumulated transcription like a completed message
-                try:
-                    loop = asyncio.get_event_loop()
-                    log.info(f"Auto-submitting timed out transcription: '{accumulated_text[:50]}...'")
-                    loop.create_task(self.handle_user_message(accumulated_text))
-                except Exception as e:
-                    log.error(f"Error auto-submitting transcription: {e}")
-
-            # Start transcription with streaming mode for real-time results
+            # Start transcription session (no timeout callback needed - files are processed completely)
             success = await self.whisper.start_transcription(
                 session_id=transcription_session_id,
-                callback=on_transcription_result,
-                streaming_mode=streaming_mode,
-                timeout_callback=on_timeout
+                callback=on_transcription_result
             )
 
             if success:
@@ -413,7 +413,7 @@ class WebSocketHandler:
                     "type": "server_transcription_started",
                     "session_id": transcription_session_id
                 })
-                log.info(f"Started server transcription session: {transcription_session_id} (streaming={streaming_mode})")
+                log.info(f"Started server transcription session: {transcription_session_id}")
                 return True
             else:
                 await self.send_error("Failed to start server transcription")
@@ -444,43 +444,52 @@ class WebSocketHandler:
         except Exception as e:
             log.error(f"Error stopping server transcription: {e}")
 
-    async def handle_audio_chunk(self, audio_data: str):
+    async def handle_complete_audio_file(self, audio_data: str):
         """
-        Handle incoming audio chunk for server transcription
+        Handle complete audio file for server transcription with keyword detection
         
         Args:
-            audio_data: Base64 encoded audio data
+            audio_data: Base64 encoded complete audio file
         """
         if not self.whisper_available or not self.whisper:
-            log.warning("Whisper not available, ignoring audio chunk")
+            log.warning("Whisper not available, ignoring audio file")
             return
 
-        # Process audio chunks in background to avoid blocking WebSocket
-        asyncio.create_task(self._process_audio_chunk_async(audio_data))
+        # Process complete audio file in background to avoid blocking WebSocket
+        asyncio.create_task(self._process_complete_audio_file_async(audio_data))
 
-    async def _process_audio_chunk_async(self, audio_data: str):
-        """Process audio chunk asynchronously without blocking WebSocket"""
+    async def _process_complete_audio_file_async(self, audio_data: str):
+        """Process complete audio file asynchronously without blocking WebSocket"""
         try:
             # Decode base64 audio data
             audio_bytes = base64.b64decode(audio_data)
-            log.info(f"Processing audio chunk: {len(audio_bytes)} bytes")
+            log.info(f"Processing complete audio file: {len(audio_bytes)} bytes")
             
-            # Process audio chunk for the current session
+            # Process complete audio file for the current session
             if self.current_transcription_session_id:
-                success = await self.whisper.process_audio_chunk(
+                success = await self.whisper.process_complete_audio_file(
                     self.current_transcription_session_id, 
                     audio_bytes
                 )
                 
                 if not success:
-                    log.warning("Failed to process audio chunk")
+                    log.warning("Failed to process complete audio file")
                 else:
-                    log.debug("Audio chunk processed successfully")
+                    log.debug("Complete audio file processed successfully")
             else:
-                log.warning("No active transcription session for audio chunk")
+                log.warning("No active transcription session for audio file")
 
         except Exception as e:
-            log.error(f"Error processing audio chunk: {e}")
+            log.error(f"Error processing complete audio file: {e}")
+
+    # Legacy method for backward compatibility
+    async def handle_audio_chunk(self, audio_data: str):
+        """Legacy method - redirects to complete audio file handling"""
+        await self.handle_complete_audio_file(audio_data)
+
+    async def _process_audio_chunk_async(self, audio_data: str):
+        """Legacy method - redirects to complete audio file processing"""
+        await self._process_complete_audio_file_async(audio_data)
 
     async def get_transcription_status(self):
         """Get current transcription service status"""
@@ -523,6 +532,9 @@ class WebSocketHandler:
 
         elif message_type == "audio_chunk":
             await self.handle_audio_chunk(message_data.get("data", ""))
+        
+        elif message_type == "complete_audio_file":
+            await self.handle_complete_audio_file(message_data.get("data", ""))
 
         elif message_type == "get_transcription_status":
             await self.get_transcription_status()

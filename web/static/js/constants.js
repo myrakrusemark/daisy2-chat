@@ -1,20 +1,19 @@
 // Global constants for Claude Assistant
 window.CLAUDE_CONSTANTS = {
-  // Wake word configuration
-  WAKE_WORD: 'Hey Daisy',
-  WAKE_WORD_DISPLAY: 'Hey Daisy',
+  // Keyword detection configuration  
+  DEFAULT_KEYWORDS: ['hey daisy', 'daisy'],
+  KEYWORD_DISPLAY: 'Hey Daisy',
     
   // UI messages
   READY_MESSAGE: 'Ready to assist',
-  WAKE_WORD_LISTENING_MESSAGE: function() {
-    return `Listening for wake word: "${window.CLAUDE_CONSTANTS.WAKE_WORD_DISPLAY}"`;
+  VAD_LISTENING_MESSAGE: function() {
+    return `👂 Listening continuously for "${window.CLAUDE_CONSTANTS.KEYWORD_DISPLAY}"...`;
   },
     
-  // Delays and timeouts
-  WAKE_WORD_RESUME_DELAY: 500,
-  WAKE_WORD_RESTART_DELAY: 1000,
+  // VAD and timeout configuration
   SILENCE_TIMEOUT: 2000,
-  WAKE_WORD_SILENCE_TIMEOUT: 2000, // Auto-send wake-word transcription after 2 seconds of silence
+  VAD_SPEECH_TIMEOUT: 2000, // Stop recording after 2 seconds of VAD silence
+  VAD_DETECTION_TIMEOUT: 10000, // 10 seconds timeout for initial speech detection
   RECOGNITION_RESTART_DELAY: 100,
   AUDIO_INIT_VOLUME: 0.01,
     

@@ -378,6 +378,24 @@ class WebSocketClient {
   }
 
   /**
+     * Send complete audio file for server transcription with keyword detection
+     */
+  sendCompleteAudioFile(audioData) {
+    if (!this.connected) {
+      return false;
+    }
+
+    const message = {
+      type: 'complete_audio_file',
+      data: audioData
+    };
+
+    this.ws.send(JSON.stringify(message));
+    this.connectionQuality.messagesSent++;
+    return true;
+  }
+
+  /**
      * Get transcription status
      */
   getTranscriptionStatus() {

@@ -11,7 +11,8 @@ import tempfile
 import subprocess
 import numpy as np
 import signal
-from typing import Callable, Optional, AsyncGenerator, Dict
+import re
+from typing import Callable, Optional, AsyncGenerator, Dict, List
 from dataclasses import dataclass, field
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 
@@ -32,6 +33,9 @@ class TranscriptionResult:
     is_final: bool
     confidence: float = 0.0
     language: str = "en"
+    keyword_found: bool = False
+    keyword_matched: Optional[str] = None
+    command_text: Optional[str] = None
 
 
 @dataclass
@@ -76,26 +80,31 @@ class WhisperTranscriptionService:
         self.sample_rate = 16000
         self.channels = 1
         
+        # Keyword detection configuration
+        self.keywords = ["hey daisy", "daisy"]  # Default keywords
+        self.keyword_variations = {
+            "hey daisy": ["hey daisy", "hay daisy", "hey daisey", "hay daisey", "hey dazy", "hai daisy"],
+            "daisy": ["daisy", "daisey", "dazy", "daisie"]
+        }
+        
         # Multi-session management
         self.active_sessions: Dict[str, TranscriptionSession] = {}
         self.sessions_lock = threading.Lock()
         
-        # Global settings for all sessions
-        self.streaming_chunk_size = 16000  # 1 second of 16kHz audio (in samples)
-        self.silence_timeout = 3.0  # 3 seconds of silence before auto-stop
-        self.max_session_duration = 20.0  # 20 seconds max session
+        # Simplified settings for complete file processing
+        self.max_session_duration = 30.0  # 30 seconds max session
         
         # Initialize faster-whisper model
         self.model = None
         self._initialize_model()
         
-        # Initialize thread pool for audio processing - increased for concurrent sessions
+        # Initialize thread pool for audio processing
         self.audio_thread_pool = ThreadPoolExecutor(
-            max_workers=8,  # Increased from 4 to 8 for better concurrent session support
+            max_workers=4,  # Sufficient for complete file processing
             thread_name_prefix="whisper_audio"
         )
         
-        log.info(f"WhisperTranscriptionService initialized with model: {model_size}, language: {language} (multi-session support)")
+        log.info(f"WhisperTranscriptionService initialized with model: {model_size}, language: {language} (keyword detection enabled)")
 
     def _initialize_model(self):
         """Initialize the faster-whisper model"""
@@ -111,21 +120,139 @@ class WhisperTranscriptionService:
             log.error(f"Failed to initialize whisper model: {e}")
             raise
 
+    def detect_keyword(self, text: str) -> Dict:
+        """
+        Detect keywords in transcribed text
+        
+        Args:
+            text: The transcribed text to analyze
+            
+        Returns:
+            Dictionary with keyword detection results
+        """
+        if not text or not isinstance(text, str):
+            return {
+                "found": False,
+                "keyword": None,
+                "command": "",
+                "full_text": text or ""
+            }
+        
+        text_lower = text.lower().strip()
+        log.debug(f"Checking for keywords in: '{text_lower}'")
+        
+        # Check each configured keyword and its variations
+        for keyword in self.keywords:
+            variations = self.keyword_variations.get(keyword, [keyword])
+            
+            for variation in variations:
+                match_index = text_lower.find(variation)
+                if match_index != -1:
+                    # Extract command text after the keyword
+                    command_start = match_index + len(variation)
+                    command_text = text[command_start:].strip()
+                    
+                    log.info(f"✓ Keyword detected: '{keyword}' (matched '{variation}') in '{text}'")
+                    log.info(f"  Command extracted: '{command_text}'")
+                    
+                    return {
+                        "found": True,
+                        "keyword": keyword,
+                        "matched_variation": variation,
+                        "command": command_text,
+                        "full_text": text,
+                        "confidence": 1.0 if variation == keyword else 0.9
+                    }
+        
+        log.debug(f"No keywords found in: '{text_lower}'")
+        return {
+            "found": False,
+            "keyword": None,
+            "command": "",
+            "full_text": text,
+            "checked_keywords": self.keywords
+        }
+
+    def update_keywords(self, keywords: List[str]) -> bool:
+        """
+        Update the list of keywords to detect
+        
+        Args:
+            keywords: List of keywords to detect
+            
+        Returns:
+            True if updated successfully
+        """
+        try:
+            if not isinstance(keywords, list) or not keywords:
+                log.error("Keywords must be a non-empty list")
+                return False
+            
+            # Clean and validate keywords
+            clean_keywords = []
+            for kw in keywords:
+                if isinstance(kw, str) and kw.strip():
+                    clean_keywords.append(kw.lower().strip())
+            
+            if not clean_keywords:
+                log.error("No valid keywords provided")
+                return False
+            
+            self.keywords = clean_keywords
+            log.info(f"Keywords updated: {self.keywords}")
+            return True
+            
+        except Exception as e:
+            log.error(f"Error updating keywords: {e}")
+            return False
+
+    def add_keyword_variations(self, keyword: str, variations: List[str]) -> bool:
+        """
+        Add variations for a keyword to improve fuzzy matching
+        
+        Args:
+            keyword: The base keyword
+            variations: List of variations to match
+            
+        Returns:
+            True if added successfully
+        """
+        try:
+            if not keyword or not isinstance(variations, list):
+                return False
+            
+            keyword_lower = keyword.lower().strip()
+            if keyword_lower not in self.keywords:
+                log.warning(f"Keyword '{keyword_lower}' not in active keywords list")
+            
+            clean_variations = [keyword_lower]  # Always include the base keyword
+            for var in variations:
+                if isinstance(var, str) and var.strip():
+                    clean_var = var.lower().strip()
+                    if clean_var not in clean_variations:
+                        clean_variations.append(clean_var)
+            
+            self.keyword_variations[keyword_lower] = clean_variations
+            log.info(f"Added variations for '{keyword_lower}': {clean_variations}")
+            return True
+            
+        except Exception as e:
+            log.error(f"Error adding keyword variations: {e}")
+            return False
+
     async def start_transcription(
         self, 
         session_id: str, 
         callback: Callable[[TranscriptionResult], None],
-        streaming_mode: bool = False,
         timeout_callback: Optional[Callable[[str], None]] = None
     ) -> bool:
         """
-        Start real-time transcription session
+        Start transcription session for complete file processing
         
         Args:
             session_id: Unique session identifier
             callback: Function to call with transcription results
-            streaming_mode: If True, process chunks immediately for live transcription
-            timeout_callback: Function to call when session times out with accumulated text
+            timeout_callback: Function to call when session times out
             
         Returns:
             True if started successfully
@@ -136,12 +263,12 @@ class WhisperTranscriptionService:
                 return False
             
             try:
-                # Create new transcription session
+                # Create new transcription session (no streaming mode)
                 session = TranscriptionSession(
                     session_id=session_id,
                     callback=callback,
                     timeout_callback=timeout_callback,
-                    streaming_mode=streaming_mode,
+                    streaming_mode=False,  # Always batch processing for complete files
                     session_start_time=time.time()
                 )
                 
@@ -175,13 +302,13 @@ class WhisperTranscriptionService:
             log.info(f"Stopped transcription session: {session_id} (remaining active: {len(self.active_sessions)})")
             return True
 
-    async def process_audio_chunk(self, session_id: str, audio_data: bytes) -> bool:
+    async def process_complete_audio_file(self, session_id: str, audio_data: bytes) -> bool:
         """
-        Process incoming audio chunk for specific session
+        Process complete audio file for transcription with keyword detection
         
         Args:
             session_id: Session ID to process audio for
-            audio_data: WebM/Opus audio data from browser
+            audio_data: Complete audio file data from browser (WebM/WAV)
             
         Returns:
             True if processed successfully
@@ -189,7 +316,7 @@ class WhisperTranscriptionService:
         with self.sessions_lock:
             session = self.active_sessions.get(session_id)
             if not session:
-                log.warning(f"Session {session_id} not found, ignoring audio chunk")
+                log.warning(f"Session {session_id} not found, ignoring audio file")
                 return False
             
         # Check for session timeout
@@ -197,67 +324,36 @@ class WhisperTranscriptionService:
             return False
             
         try:
-            log.info(f"Received audio chunk for session {session_id}: {len(audio_data)} bytes")
+            log.info(f"Received complete audio file for session {session_id}: {len(audio_data)} bytes")
             
-            # Add to session-specific buffer
-            session.audio_buffer.extend(audio_data)
-            
-            if session.streaming_mode:
-                # Process each chunk for streaming transcription
-                audio_to_process = bytes(session.audio_buffer)
-                session.audio_buffer.clear()
-                
-                # Process audio with cumulative context
-                asyncio.create_task(self._process_streaming_audio(session, audio_to_process))
-            else:
-                # In batch mode, accumulate chunks before processing
-                if len(session.audio_buffer) >= 2000:  # ~0.5s of WebM audio
-                    audio_to_process = bytes(session.audio_buffer)
-                    session.audio_buffer.clear()
-                    
-                    # Process audio in background
-                    asyncio.create_task(self._process_audio_file(session, audio_to_process, streaming=False))
+            # Process complete audio file directly
+            asyncio.create_task(self._process_audio_file_with_keywords(session, audio_data))
             
             return True
             
         except Exception as e:
-            log.error(f"Error processing audio chunk for session {session_id}: {e}")
+            log.error(f"Error processing complete audio file for session {session_id}: {e}")
             return False
 
-    async def _process_streaming_audio(self, session: TranscriptionSession, audio_data: bytes):
-        """Process 1-second WebM audio chunk with cumulative context for streaming transcription"""
+    async def _process_audio_file_with_keywords(self, session: TranscriptionSession, audio_data: bytes):
+        """Process complete audio file with keyword detection"""
         try:
-            # Add raw WebM chunk to session's cumulative buffer (don't convert individual chunks)
-            session.cumulative_audio.extend(audio_data)
+            log.info(f"Processing complete audio file for session {session.session_id}: {len(audio_data)} bytes")
             
-            # Process combined WebM every ~2 seconds worth of data
-            # WebM chunks are ~16KB each, so ~32KB = ~2 seconds
-            if len(session.cumulative_audio) >= 32000:  # ~2 seconds of WebM data
-                log.info(f"Processing combined WebM audio for session {session.session_id}: {len(session.cumulative_audio)} bytes")
+            # Convert audio to numpy array
+            audio_array = await self._convert_audio_to_wav(audio_data)
+            
+            if audio_array is not None:
+                duration = len(audio_array) / self.sample_rate
+                log.info(f"Transcribing complete audio for session {session.session_id}: {len(audio_array)} samples, {duration:.1f}s")
                 
-                # Convert combined WebM to audio array
-                combined_webm = bytes(session.cumulative_audio)
-                audio_array = await self._convert_audio_to_wav(combined_webm)
-                
-                if audio_array is not None:
-                    duration = len(audio_array) / self.sample_rate
-                    log.info(f"Transcribing combined audio for session {session.session_id}: {len(audio_array)} samples, {duration:.1f}s")
-                    
-                    # Process combined audio for transcription
-                    await self._process_audio_async(session, audio_array, streaming=True)
-                else:
-                    log.warning(f"Failed to convert combined WebM audio for session {session.session_id}")
-                
-                # Keep last 15 seconds worth of WebM data (prevent memory issues)
-                max_webm_size = 16000 * 15  # ~15 seconds of WebM chunks
-                if len(session.cumulative_audio) > max_webm_size:
-                    # Keep only the last ~10 seconds of WebM data
-                    keep_size = 16000 * 10  # ~10 seconds
-                    session.cumulative_audio = session.cumulative_audio[-keep_size:]
-                    log.debug(f"Trimmed cumulative WebM buffer to last ~10 seconds for session {session.session_id}")
+                # Process complete audio for transcription with keyword detection
+                await self._process_audio_async_with_keywords(session, audio_array)
+            else:
+                log.warning(f"Failed to convert audio file for session {session.session_id}")
                     
         except Exception as e:
-            log.error(f"Error in streaming audio processing for session {session.session_id}: {e}")
+            log.error(f"Error processing complete audio file for session {session.session_id}: {e}")
 
     async def _process_audio_file(self, session: TranscriptionSession, audio_data: bytes, streaming: bool = False):
         """Process audio file (WAV/WebM) directly"""
@@ -385,71 +481,65 @@ class WhisperTranscriptionService:
             log.error(f"Error in optimized audio conversion: {e}")
             return None
 
-    async def _process_audio_async(self, session: TranscriptionSession, audio_array: np.ndarray, streaming: bool = False):
-        """Process audio data asynchronously using faster-whisper"""
+    async def _process_audio_async_with_keywords(self, session: TranscriptionSession, audio_array: np.ndarray):
+        """Process complete audio data with keyword detection"""
         try:
-            # In streaming mode, process even shorter chunks for real-time feedback
-            min_duration = 0.05 if streaming else 0.1  # 50ms vs 100ms
+            min_duration = 0.1  # 100ms minimum
             
             if len(audio_array) < self.sample_rate * min_duration:
                 log.debug(f"Skipping short audio chunk ({len(audio_array)} samples)")
                 return
             
-            # Run transcription in our dedicated thread pool with asyncio timeout
+            # Run transcription in our dedicated thread pool with timeout
             loop = asyncio.get_event_loop()
             try:
-                # Use asyncio.wait_for instead of signal-based timeout (signals don't work in thread pools)
                 result = await asyncio.wait_for(
-                    loop.run_in_executor(self.audio_thread_pool, self._transcribe_audio_internal, audio_array, streaming),
-                    timeout=15.0  # 15 second timeout
+                    loop.run_in_executor(self.audio_thread_pool, self._transcribe_audio_with_keywords, audio_array),
+                    timeout=30.0  # 30 second timeout for complete files
                 )
             except asyncio.TimeoutError:
-                log.error("Whisper transcription timed out after 15 seconds")
+                log.error("Whisper transcription timed out after 30 seconds")
                 result = None
             except Exception as e:
                 log.error(f"Error in whisper transcription: {e}")
                 result = None
             
             if result and session.callback:
-                # Update last transcription time when we get actual text
+                # Update session state
                 if result.text.strip():
                     session.last_transcription_time = time.time()
-                    self._reset_session_silence_timer(session)
-                    
-                    # Accumulate transcription text for timeout handling
-                    if session.accumulated_transcription:
-                        session.accumulated_transcription += " " + result.text.strip()
-                    else:
-                        session.accumulated_transcription = result.text.strip()
+                    session.accumulated_transcription = result.text.strip()
                 
                 session.callback(result)
                 
+                # Auto-stop session after processing complete file
+                await asyncio.sleep(0.1)  # Brief delay to ensure callback completes
+                await self.stop_transcription(session.session_id)
+                
         except Exception as e:
-            log.error(f"Error in async audio processing: {e}")
+            log.error(f"Error in async audio processing with keywords: {e}")
 
-    def _transcribe_audio_internal(self, audio_array: np.ndarray, streaming: bool = False) -> Optional[TranscriptionResult]:
-        """Internal transcription method (blocking call)"""
+    async def _process_audio_async(self, session: TranscriptionSession, audio_array: np.ndarray, streaming: bool = False):
+        """Legacy method - redirects to keyword processing"""
+        await self._process_audio_async_with_keywords(session, audio_array)
+
+    def _transcribe_audio_with_keywords(self, audio_array: np.ndarray) -> Optional[TranscriptionResult]:
+        """Transcribe audio and perform keyword detection"""
         try:
-            log.debug(f"Transcribing audio: {len(audio_array)} samples, {len(audio_array)/self.sample_rate:.2f}s, streaming={streaming}")
+            log.debug(f"Transcribing complete audio: {len(audio_array)} samples, {len(audio_array)/self.sample_rate:.2f}s")
             
-            # Adjust VAD parameters based on streaming mode
-            if streaming:
-                # More aggressive VAD for real-time processing
-                vad_params = dict(
-                    min_silence_duration_ms=200,  # Shorter silence detection
-                    max_speech_duration_s=30,     # Longer speech segments
-                    speech_pad_ms=30              # Minimal padding
-                )
-            else:
-                # Standard VAD for batch processing
-                vad_params = dict(min_silence_duration_ms=500)
+            # Use faster-whisper for transcription with optimized settings for complete files
+            vad_params = dict(
+                min_silence_duration_ms=300,  # Balanced silence detection
+                max_speech_duration_s=60,     # Allow longer speech for complete files
+                speech_pad_ms=50              # Some padding for natural speech
+            )
             
-            # Use faster-whisper for transcription
             segments, info = self.model.transcribe(
                 audio_array,
                 language=self.language,
                 task="transcribe",
-                vad_filter=True,  # Voice activity detection
+                vad_filter=True,
                 vad_parameters=vad_params,
                 word_timestamps=False
             )
@@ -461,14 +551,20 @@ class WhisperTranscriptionService:
                 log.debug(f"Segment: '{segment.text.strip()}'")
             
             combined_text = " ".join(text_parts).strip()
-            log.info(f"Transcription result: '{combined_text}' (streaming={streaming})")
+            log.info(f"Transcription result: '{combined_text}'")
             
             if combined_text:
+                # Perform keyword detection
+                keyword_result = self.detect_keyword(combined_text)
+                
                 return TranscriptionResult(
                     text=combined_text,
-                    is_final=not streaming,  # Streaming results are interim until final
+                    is_final=True,  # Complete files are always final
                     confidence=info.language_probability if hasattr(info, 'language_probability') else 0.9,
-                    language=info.language if hasattr(info, 'language') else self.language
+                    language=info.language if hasattr(info, 'language') else self.language,
+                    keyword_found=keyword_result["found"],
+                    keyword_matched=keyword_result.get("keyword"),
+                    command_text=keyword_result.get("command", "")
                 )
             else:
                 log.debug("No transcription result (empty or silence)")
@@ -476,8 +572,12 @@ class WhisperTranscriptionService:
             return None
             
         except Exception as e:
-            log.error(f"Transcription error: {e}")
+            log.error(f"Transcription with keywords error: {e}")
             return None
+
+    def _transcribe_audio_internal(self, audio_array: np.ndarray, streaming: bool = False) -> Optional[TranscriptionResult]:
+        """Legacy method - redirects to keyword transcription"""
+        return self._transcribe_audio_with_keywords(audio_array)
 
     def is_available(self) -> bool:
         """Check if whisper transcription is available"""
