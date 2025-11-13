@@ -31,13 +31,15 @@ window.CLAUDE_CONSTANTS = {
   // STT Engine configuration
   STT_ENGINES: {
     SERVER_WHISPER: 'server-whisper',
-    BROWSER_SPEECH_API: 'browser-speech-api'
+    BROWSER_SPEECH_API: 'browser-speech-api',
+    ANDROID_APP: 'android-app'
   },
     
   // STT Engine display names
   STT_ENGINE_NAMES: {
     'server-whisper': 'Server Whisper',
-    'browser-speech-api': 'Browser Speech API'
+    'browser-speech-api': 'Browser Speech API',
+    'android-app': 'Android App'
   },
     
   // Default STT engine preference

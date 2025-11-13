@@ -1323,10 +1323,11 @@ class ClaudeAssistant {
     console.log('Is final:', isFinal);
 
     if (isFinal) {
-      // Process final transcript same as regular speech
+      // Process final transcript - route directly to existing transcript handler
+      // This reuses all the existing WebSocket and conversation logic
       this.handleTranscript(text);
     } else {
-      // Show interim transcript
+      // Show interim transcript in status
       this.ui.setStatus(`App listening: "${text}"`);
     }
   }
@@ -1367,9 +1368,44 @@ class ClaudeAssistant {
   enableAppFeatures() {
     // Hide browser-specific controls when in app
     const controlsArea = document.querySelector('.controls-area');
+    const wakeWordToggle = document.querySelector('.form-control:has(#wake-word-toggle)');
+    
+    // Find STT Engine section by looking for the Speech Recognition Engine label
+    const sttSection = Array.from(document.querySelectorAll('.form-control')).find(el => {
+      const label = el.querySelector('.label-text.font-semibold');
+      return label && label.textContent.includes('Speech Recognition Engine');
+    });
     
     if (controlsArea) {
       controlsArea.style.display = 'none';
+    }
+    
+    // Hide wake word toggle in header
+    if (wakeWordToggle) {
+      wakeWordToggle.style.display = 'none';
+    }
+    
+    // Hide STT Engine selection section
+    if (sttSection) {
+      sttSection.style.display = 'none';
+    }
+    
+    // Find and hide Wake Word Tuning section
+    const wakeWordTuningSection = Array.from(document.querySelectorAll('.space-y-3')).find(el => {
+      const span = el.querySelector('span.font-semibold');
+      return span && span.textContent.includes('Wake Word Tuning');
+    });
+    
+    if (wakeWordTuningSection) {
+      wakeWordTuningSection.style.display = 'none';
+    }
+    
+    // Auto-select Android app STT engine
+    const androidSttRadio = document.getElementById('stt-android-app');
+    if (androidSttRadio) {
+      androidSttRadio.checked = true;
+      // Trigger change event to notify other components
+      androidSttRadio.dispatchEvent(new Event('change', { bubbles: true }));
     }
 
     // Show app-specific status
