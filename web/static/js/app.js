@@ -28,6 +28,14 @@ class ClaudeAssistant {
     this.isListening = false;
     this.isProcessing = false;
 
+    // Android app detection state
+    this.isAndroidApp = false;
+    this.appVersion = null;
+    this.appCapabilities = [];
+
+    // Initialize Android app detection
+    this.initializeAppDetection();
+
     // Load saved settings from cookies
     this.loadSettings();
 
@@ -1224,6 +1232,169 @@ class ClaudeAssistant {
         this.wakeWordWasPausedForProcessing = false;
       }, WAKE_WORD_RESUME_DELAY);
     }
+  }
+
+  /**
+     * Initialize Android app detection
+     */
+  initializeAppDetection() {
+    // Check user agent first for immediate detection
+    this.checkUserAgent();
+
+    // Set up message listener for app communication
+    window.addEventListener('message', (event) => {
+      this.handleAppMessage(event);
+    });
+
+    console.log('Android app detection initialized');
+  }
+
+  /**
+     * Check user agent for Android app detection
+     */
+  checkUserAgent() {
+    if (navigator.userAgent.includes('OfflineVoiceDemo')) {
+      console.log('Android app detected via user agent');
+      this.isAndroidApp = true;
+    }
+  }
+
+  /**
+     * Handle messages from Android app
+     */
+  handleAppMessage(event) {
+    // Validate origin for security
+    const validOrigins = [
+      'capacitor://localhost',
+      'http://localhost',
+      'https://localhost'
+    ];
+    
+    if (!validOrigins.some(origin => event.origin.startsWith(origin))) {
+      return;
+    }
+
+    const { type, ...data } = event.data;
+
+    switch (type) {
+      case 'init':
+        this.handleAppInit(data);
+        break;
+
+      case 'transcript':
+        this.handleAppTranscript(data);
+        break;
+
+      case 'status':
+        this.handleAppStatus(data);
+        break;
+
+      default:
+        console.log('Unknown message type from app:', type, data);
+    }
+  }
+
+  /**
+     * Handle app initialization message
+     */
+  handleAppInit(data) {
+    this.isAndroidApp = true;
+    this.appVersion = data.appVersion;
+    this.appCapabilities = data.capabilities || [];
+
+    console.log('Android app connected!');
+    console.log('Version:', this.appVersion);
+    console.log('Capabilities:', this.appCapabilities);
+
+    // Update UI to show app is connected
+    this.ui.setStatus('Android voice app connected');
+
+    // Enable app-specific features
+    this.enableAppFeatures();
+  }
+
+  /**
+     * Handle voice transcript from app
+     */
+  handleAppTranscript(data) {
+    const { text, isFinal } = data;
+
+    console.log('Voice input from app:', text);
+    console.log('Is final:', isFinal);
+
+    if (isFinal) {
+      // Process final transcript same as regular speech
+      this.handleTranscript(text);
+    } else {
+      // Show interim transcript
+      this.ui.setStatus(`App listening: "${text}"`);
+    }
+  }
+
+  /**
+     * Handle status updates from app
+     */
+  handleAppStatus(data) {
+    const { status } = data;
+
+    console.log('App status:', status);
+
+    // Update UI based on app status
+    switch (status) {
+      case 'recording':
+        this.ui.setStatus('App is recording...', 'processing');
+        break;
+      case 'listening':
+        this.ui.setStatus('App is listening for wake word...');
+        break;
+      case 'processing':
+        this.ui.setStatus('App is processing...', 'processing');
+        break;
+      case 'ready':
+        this.ui.setStatus('App ready');
+        break;
+      case 'timeout':
+        this.ui.setStatus('App listening timeout');
+        break;
+      default:
+        this.ui.setStatus(`App status: ${status}`);
+    }
+  }
+
+  /**
+     * Enable features specific to Android app
+     */
+  enableAppFeatures() {
+    // Hide browser-specific controls when in app
+    const controlsArea = document.querySelector('.controls-area');
+    
+    if (controlsArea) {
+      controlsArea.style.display = 'none';
+    }
+
+    // Show app-specific status
+    this.ui.setStatus('Voice controls handled by Android app');
+  }
+
+  /**
+     * Check if running in Android app
+     */
+  isRunningInApp() {
+    return this.isAndroidApp;
+  }
+
+  /**
+     * Get app version if available
+     */
+  getAppVersion() {
+    return this.appVersion;
+  }
+
+  /**
+     * Check if app has specific capability
+     */
+  hasAppCapability(capability) {
+    return this.appCapabilities.includes(capability);
   }
 }
 
