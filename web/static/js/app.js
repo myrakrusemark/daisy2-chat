@@ -77,6 +77,9 @@ class ClaudeAssistant {
         
     // Load wake word tuning settings
     this.loadWakeWordTuningSettings();
+    
+    // Load buffer duration from localStorage
+    this.loadBufferDurationSetting();
   }
 
   /**
@@ -154,6 +157,34 @@ class ClaudeAssistant {
       inputGain,
       vadHangover
     };
+  }
+
+  /**
+   * Load buffer duration setting from cookies
+   */
+  loadBufferDurationSetting() {
+    const defaultBufferDuration = 750; // Default 750ms
+    const bufferDuration = parseInt(this.getCookie('bufferDuration')) || defaultBufferDuration;
+    
+    // Update UI elements
+    const bufferSlider = document.getElementById('buffer-duration');
+    const bufferDisplay = document.getElementById('buffer-duration-display');
+    
+    if (bufferSlider) {
+      bufferSlider.value = bufferDuration;
+    }
+    if (bufferDisplay) {
+      bufferDisplay.textContent = `${bufferDuration}ms`;
+    }
+    
+    // Apply the setting to VAD service if available
+    if (this.audio && this.audio.vadService && this.audio.vadService.updateSettings) {
+      this.audio.vadService.updateSettings({
+        bufferDurationMs: bufferDuration
+      });
+    }
+    
+    console.log(`Buffer duration loaded: ${bufferDuration}ms`);
   }
 
   /**
@@ -332,6 +363,9 @@ class ClaudeAssistant {
      */
   connectWebSocket() {
     this.ws = new window.WebSocketClient(this.sessionId);
+    
+    // Set WebSocket reference in audio manager
+    this.audio.setWebSocket(this.ws);
 
     // Setup WebSocket callbacks
     this.ws.onConnect = () => {
@@ -365,7 +399,7 @@ class ClaudeAssistant {
       }
     };
 
-    this.ws.onDisconnect = () => {
+    this.ws.onDisconnect = async () => {
       console.log('Disconnected from WebSocket');
       this.ui.setConnectionStatus('disconnected');
             
@@ -373,7 +407,7 @@ class ClaudeAssistant {
       this.isProcessing = false;
       this.isListening = false;
             
-      // Stop wake word if running
+      // Stop VAD if running
       if (this.activationMode === 'vad-continuous') {
         await this.stopVADListening();
       }
@@ -658,6 +692,7 @@ class ClaudeAssistant {
 
     // Handler for starting push-to-talk (mouse/touch)
     const startPTT = (e) => {
+      console.log('DEBUG: PTT button startPTT called!');
       e.preventDefault();
 
       if (!this.canStartListening()) {
@@ -669,6 +704,7 @@ class ClaudeAssistant {
         this.isProcessing = false;
       }
       this.setActivationMode('push-to-talk');
+      console.log('DEBUG: PTT button pressed, activation mode set to:', this.activationMode);
       this.startListening();
     };
 
@@ -676,6 +712,9 @@ class ClaudeAssistant {
     const stopPTT = (e) => {
       if (this.activationMode === 'push-to-talk') {
         this.stopListening();
+        // Reset to vad-continuous mode for keyword detection
+        this.setActivationMode('vad-continuous');
+        console.log('DEBUG: PTT released, reset to vad-continuous mode');
       }
     };
 
@@ -723,6 +762,9 @@ class ClaudeAssistant {
     document.getElementById('enable-sounds').addEventListener('change', (e) => {
       this.audio.setSoundsEnabled(e.target.checked);
     });
+
+    // Keyword listening settings
+    this.setupKeywordControls();
 
     document.getElementById('btn-new-session').addEventListener('click', () => {
       this.createNewSession();
@@ -793,6 +835,7 @@ class ClaudeAssistant {
      */
   setActivationMode(mode) {
     this.activationMode = mode;
+    this.audio.setActivationMode(mode);
 
     // Update UI
     document.querySelectorAll('.mode-btn').forEach(btn => {
@@ -839,7 +882,9 @@ class ClaudeAssistant {
 
     // VAD is always listening, no need to pause/resume
 
-    const success = this.audio.startListening(this.activationMode, this.ws);
+    const bypassKeywords = this.activationMode === 'push-to-talk';
+    console.log('DEBUG: activationMode:', this.activationMode, 'bypassKeywords:', bypassKeywords);
+    const success = this.audio.startRecording(bypassKeywords);
     if (success) {
       this.isListening = true;
       applyState('listening');
@@ -862,7 +907,7 @@ class ClaudeAssistant {
   stopListening() {
     if (!this.isListening) {return;}
 
-    this.audio.stopListening(this.ws);
+    this.audio.stopRecording();
     this.isListening = false;
 
     // Update mode button
@@ -917,7 +962,7 @@ class ClaudeAssistant {
     case 'listening':
       // Stop speech recognition
       if (this.isListening) {
-        this.audio.stopListening();
+        this.audio.stopRecording();
         this.isListening = false;
         const btn = document.getElementById('btn-push-to-talk');
         if (btn) {btn.classList.remove('btn-active');}
@@ -1169,15 +1214,15 @@ class ClaudeAssistant {
   /**
      * Pause wake word detection during processing to prevent microphone interference with Bluetooth audio
      */
-  pauseWakeWordForProcessing() {
+  async pauseWakeWordForProcessing() {
     // If wake word mode is active, mark it as paused for processing
     const wakeWordToggle = document.getElementById('wake-word-toggle');
     if (wakeWordToggle && wakeWordToggle.checked) {
       console.log('Marking wake word as paused for processing to prevent Bluetooth audio interference');
             
-      // Stop if currently listening
+      // For VAD continuous mode, we don't stop during processing
       if (this.activationMode === 'vad-continuous') {
-        await this.stopVADListening();
+        console.log('VAD continuous mode - staying active during processing');
       }
             
       // VAD continues listening during processing
@@ -1235,20 +1280,20 @@ class ClaudeAssistant {
     const { type, ...data } = event.data;
 
     switch (type) {
-      case 'init':
-        this.handleAppInit(data);
-        break;
+    case 'init':
+      this.handleAppInit(data);
+      break;
 
-      case 'transcript':
-        this.handleAppTranscript(data);
-        break;
+    case 'transcript':
+      this.handleAppTranscript(data);
+      break;
 
-      case 'status':
-        this.handleAppStatus(data);
-        break;
+    case 'status':
+      this.handleAppStatus(data);
+      break;
 
-      default:
-        console.log('Unknown message type from app:', type, data);
+    default:
+      console.log('Unknown message type from app:', type, data);
     }
   }
 
@@ -1300,23 +1345,23 @@ class ClaudeAssistant {
 
     // Update UI based on app status
     switch (status) {
-      case 'recording':
-        this.ui.setStatus('App is recording...', 'processing');
-        break;
-      case 'listening':
-        this.ui.setStatus('App is listening for wake word...');
-        break;
-      case 'processing':
-        this.ui.setStatus('App is processing...', 'processing');
-        break;
-      case 'ready':
-        this.ui.setStatus('App ready');
-        break;
-      case 'timeout':
-        this.ui.setStatus('App listening timeout');
-        break;
-      default:
-        this.ui.setStatus(`App status: ${status}`);
+    case 'recording':
+      this.ui.setStatus('App is recording...', 'processing');
+      break;
+    case 'listening':
+      this.ui.setStatus('App is listening for wake word...');
+      break;
+    case 'processing':
+      this.ui.setStatus('App is processing...', 'processing');
+      break;
+    case 'ready':
+      this.ui.setStatus('App ready');
+      break;
+    case 'timeout':
+      this.ui.setStatus('App listening timeout');
+      break;
+    default:
+      this.ui.setStatus(`App status: ${status}`);
     }
   }
 
@@ -1375,6 +1420,156 @@ class ClaudeAssistant {
      */
   isRunningInApp() {
     return this.isAndroidApp;
+  }
+
+  /**
+   * Setup keyword listening controls
+   */
+  setupKeywordControls() {
+    // Keyword input
+    const keywordInput = document.getElementById('keyword-input');
+    if (keywordInput) {
+      keywordInput.addEventListener('input', (e) => {
+        // Update keyword in real-time
+        const keyword = e.target.value.trim().toLowerCase();
+        if (keyword) {
+          this.audio.setKeywords([keyword]);
+          console.log(`Keyword updated: "${keyword}"`);
+        }
+      });
+    }
+
+    // VAD sensitivity
+    const vadSensitivity = document.getElementById('vad-sensitivity');
+    const vadSensitivityDisplay = document.getElementById('vad-sensitivity-display');
+    if (vadSensitivity && vadSensitivityDisplay) {
+      vadSensitivity.addEventListener('input', (e) => {
+        const value = parseFloat(e.target.value);
+        vadSensitivityDisplay.textContent = value.toFixed(2);
+      });
+    }
+
+    // Recording timeout
+    const recordingTimeout = document.getElementById('recording-timeout');
+    const recordingTimeoutDisplay = document.getElementById('recording-timeout-display');
+    if (recordingTimeout && recordingTimeoutDisplay) {
+      recordingTimeout.addEventListener('input', (e) => {
+        const value = parseFloat(e.target.value);
+        recordingTimeoutDisplay.textContent = `${value}s`;
+      });
+    }
+
+    // Buffer duration
+    const bufferDuration = document.getElementById('buffer-duration');
+    const bufferDurationDisplay = document.getElementById('buffer-duration-display');
+    if (bufferDuration && bufferDurationDisplay) {
+      bufferDuration.addEventListener('input', (e) => {
+        const value = parseInt(e.target.value);
+        bufferDurationDisplay.textContent = `${value}ms`;
+      });
+    }
+
+    // Apply settings button
+    const applyBtn = document.getElementById('btn-apply-keyword-settings');
+    if (applyBtn) {
+      applyBtn.addEventListener('click', () => {
+        this.applyKeywordSettings();
+      });
+    }
+
+    // Reset settings button
+    const resetBtn = document.getElementById('btn-reset-keyword-settings');
+    if (resetBtn) {
+      resetBtn.addEventListener('click', () => {
+        this.resetKeywordSettings();
+      });
+    }
+  }
+
+  /**
+   * Apply keyword settings
+   */
+  applyKeywordSettings() {
+    const keywordInput = document.getElementById('keyword-input');
+    const vadSensitivity = document.getElementById('vad-sensitivity');
+    const recordingTimeout = document.getElementById('recording-timeout');
+    const bufferDuration = document.getElementById('buffer-duration');
+
+    if (keywordInput) {
+      const keywords = keywordInput.value.trim().toLowerCase();
+      if (keywords) {
+        // Update keywords in audio manager and keyword detector
+        this.audio.setKeywords(keywords.split(',').map(k => k.trim()));
+        
+        // Save to localStorage
+        localStorage.setItem('claudeKeywords', keywords);
+        console.log(`✓ Keywords applied: "${keywords}"`);
+      }
+    }
+
+    if (vadSensitivity) {
+      const sensitivity = parseFloat(vadSensitivity.value);
+      // Update VAD sensitivity if the VAD service supports it
+      if (this.audio.vadService && this.audio.vadService.setVadThreshold) {
+        this.audio.vadService.setVadThreshold(sensitivity);
+      }
+      localStorage.setItem('claudeVadSensitivity', sensitivity);
+      console.log(`✓ VAD sensitivity applied: ${sensitivity}`);
+    }
+
+    if (recordingTimeout) {
+      const timeout = parseFloat(recordingTimeout.value) * 1000; // Convert to ms
+      // Update timeout in audio manager
+      this.audio.setSilenceTimeout(timeout);
+      localStorage.setItem('claudeRecordingTimeout', timeout);
+      console.log(`✓ Recording timeout applied: ${timeout}ms`);
+    }
+
+    if (bufferDuration) {
+      const duration = parseInt(bufferDuration.value); // Already in ms
+      // Update buffer duration in VAD service
+      if (this.audio.vadService && this.audio.vadService.updateSettings) {
+        this.audio.vadService.updateSettings({
+          bufferDurationMs: duration
+        });
+      }
+      this.setCookie('bufferDuration', duration);
+      console.log(`✓ Pre-buffer duration applied: ${duration}ms`);
+    }
+
+    this.ui.setStatus('Keyword settings applied successfully');
+  }
+
+  /**
+   * Reset keyword settings to defaults
+   */
+  resetKeywordSettings() {
+    const keywordInput = document.getElementById('keyword-input');
+    const vadSensitivity = document.getElementById('vad-sensitivity');
+    const recordingTimeout = document.getElementById('recording-timeout');
+    const bufferDuration = document.getElementById('buffer-duration');
+
+    if (keywordInput) {
+      keywordInput.value = 'hey daisy';
+    }
+    if (vadSensitivity) {
+      vadSensitivity.value = '0.5';
+      document.getElementById('vad-sensitivity-display').textContent = '0.50';
+    }
+    if (recordingTimeout) {
+      recordingTimeout.value = '2.0';
+      document.getElementById('recording-timeout-display').textContent = '2.0s';
+    }
+    if (bufferDuration) {
+      bufferDuration.value = '750';
+      document.getElementById('buffer-duration-display').textContent = '750ms';
+    }
+
+    // Apply the reset values
+    this.applyKeywordSettings();
+    
+    console.log('✓ Keyword settings reset to defaults');
+    this.ui.setStatus('Keyword settings reset to defaults');
   }
 
   /**

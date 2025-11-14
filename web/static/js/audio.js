@@ -37,6 +37,8 @@ class AudioManager {
     this.isRecording = false;
     this.isRecognitionActive = false;
     this.currentRecordingMode = null; // 'vad-continuous'
+    this.currentActivationMode = null; // 'push-to-talk', 'vad-continuous', etc.
+    this.pendingBypassKeywords = false; // Persist bypass state for server transcription
 
     // Audio playback for streamed TTS
     this.audioChunks = [];
@@ -90,13 +92,26 @@ class AudioManager {
   setupVADService() {
     // VAD events for recording control
     this.vadService.onSpeechStart = () => {
-      console.log('VAD: Speech started - beginning recording');
-      this.startRecording();
+      console.log('VAD: Speech started');
+      // Only start recording if not in push-to-talk mode
+      // Push-to-talk handles its own recording via button press
+      if (this.currentActivationMode !== 'push-to-talk') {
+        console.log('VAD: Beginning recording (not in push-to-talk mode)');
+        this.startRecording();
+      } else {
+        console.log('VAD: Push-to-talk mode active, not auto-starting recording');
+      }
     };
 
     this.vadService.onSpeechEnd = () => {
-      console.log('VAD: Speech ended - stopping recording');
-      this.stopRecording();
+      console.log('VAD: Speech ended');
+      // Only stop recording if VAD started it (not in push-to-talk mode)
+      if (this.currentActivationMode !== 'push-to-talk') {
+        console.log('VAD: Stopping recording (not in push-to-talk mode)');
+        this.stopRecording();
+      } else {
+        console.log('VAD: Push-to-talk mode active, not auto-stopping recording');
+      }
     };
 
     this.vadService.onVadStateChanged = (state) => {
@@ -202,26 +217,39 @@ class AudioManager {
   processAccumulatedTranscript(reason) {
     const transcript = this.accumulatedTranscript.trim();
     console.log(`Processing transcript (${reason}): "${transcript}"`);
+    console.log('DEBUG: bypassKeywordDetection flag:', this.bypassKeywordDetection);
+    console.log('DEBUG: pendingBypassKeywords flag:', this.pendingBypassKeywords);
 
     if (!transcript) {
       console.log('No transcript to process');
       return;
     }
 
-    // Check for keywords
-    const keywordResult = this.keywordDetector.detectKeyword(transcript);
-    if (keywordResult.found) {
-      console.log(`✓ Keyword "${keywordResult.keyword}" found, processing command: "${keywordResult.command}"`);
+    // Skip keyword detection if bypassed (e.g., push-to-talk mode)
+    // Use pending flag for browser transcription since recording may have stopped
+    const shouldBypass = this.bypassKeywordDetection || this.pendingBypassKeywords;
+    if (shouldBypass) {
+      console.log(`✓ Keyword detection bypassed, processing full transcript: "${transcript}"`);
       if (this.onTranscript) {
-        // Send only the command part, not the keyword
-        this.onTranscript(keywordResult.command || keywordResult.fullText);
+        this.onTranscript(transcript);
       }
     } else {
-      console.log(`No keywords found in transcript, discarding: "${transcript}"`);
+      // Check for keywords
+      const keywordResult = this.keywordDetector.detectKeyword(transcript);
+      if (keywordResult.found) {
+        console.log(`✓ Keyword "${keywordResult.keyword}" found, processing command: "${keywordResult.command}"`);
+        if (this.onTranscript) {
+          // Send only the command part, not the keyword
+          this.onTranscript(keywordResult.command || keywordResult.fullText);
+        }
+      } else {
+        console.log(`No keywords found in transcript, discarding: "${transcript}"`);
+      }
     }
 
-    // Clear accumulated transcript
+    // Clear accumulated transcript and pending bypass flag
     this.accumulatedTranscript = '';
+    this.pendingBypassKeywords = false;
   }
 
   /**
@@ -266,14 +294,17 @@ class AudioManager {
   /**
    * Start recording (triggered by VAD)
    */
-  async startRecording() {
+  async startRecording(bypassKeywordDetection = false) {
     if (this.isRecording) {
       console.log('Already recording, ignoring start request');
       return;
     }
 
     this.isRecording = true;
-    console.log('🎙️ Recording started');
+    this.bypassKeywordDetection = bypassKeywordDetection;
+    this.pendingBypassKeywords = bypassKeywordDetection; // Store for server transcription
+    console.log('🎙️ Recording started' + (bypassKeywordDetection ? ' (keyword bypass)' : ''));
+    console.log('DEBUG: Set bypassKeywordDetection to:', this.bypassKeywordDetection);
 
     if (this.onRecordingStart) {
       this.onRecordingStart();
@@ -297,6 +328,7 @@ class AudioManager {
     }
 
     this.isRecording = false;
+    this.bypassKeywordDetection = false; // Reset bypass flag (but keep pendingBypassKeywords)
     console.log('🔇 Recording stopped');
 
     if (this.onRecordingStop) {
@@ -673,21 +705,36 @@ class AudioManager {
    */
   handleServerTranscriptionResult(result) {
     console.log('Server transcription result:', result);
+    console.log('DEBUG: bypassKeywordDetection flag:', this.bypassKeywordDetection);
+    console.log('DEBUG: pendingBypassKeywords flag:', this.pendingBypassKeywords);
     
     if (result.text && result.text.trim()) {
       const transcript = result.text.trim();
       
-      // Check for keywords
-      const keywordResult = this.keywordDetector.detectKeyword(transcript);
-      if (keywordResult.found) {
-        console.log(`✓ Server keyword "${keywordResult.keyword}" found, processing command: "${keywordResult.command}"`);
+      // Skip keyword detection if bypassed (e.g., push-to-talk mode)
+      // Use pending flag for server transcription since recording may have stopped
+      const shouldBypass = this.bypassKeywordDetection || this.pendingBypassKeywords;
+      if (shouldBypass) {
+        console.log(`✓ Server keyword detection bypassed, processing full transcript: "${transcript}"`);
         if (this.onTranscript) {
-          // Send only the command part, not the keyword
-          this.onTranscript(keywordResult.command || keywordResult.fullText);
+          this.onTranscript(transcript);
         }
       } else {
-        console.log(`Server: No keywords found in transcript, discarding: "${transcript}"`);
+        // Check for keywords
+        const keywordResult = this.keywordDetector.detectKeyword(transcript);
+        if (keywordResult.found) {
+          console.log(`✓ Server keyword "${keywordResult.keyword}" found, processing command: "${keywordResult.command}"`);
+          if (this.onTranscript) {
+            // Send only the command part, not the keyword
+            this.onTranscript(keywordResult.command || keywordResult.fullText);
+          }
+        } else {
+          console.log(`Server: No keywords found in transcript, discarding: "${transcript}"`);
+        }
       }
+      
+      // Clear pending bypass flag after processing
+      this.pendingBypassKeywords = false;
     }
   }
 
@@ -989,6 +1036,14 @@ class AudioManager {
     } else if (typeof keywords === 'string') {
       this.keywordDetector.updateKeywords([keywords]);
     }
+  }
+
+  /**
+   * Set the current activation mode for VAD behavior
+   */
+  setActivationMode(mode) {
+    this.currentActivationMode = mode;
+    console.log('AudioManager: Activation mode set to:', mode);
   }
 
   /**
