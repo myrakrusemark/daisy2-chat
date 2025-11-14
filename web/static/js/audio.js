@@ -118,7 +118,7 @@ class AudioManager {
    * Setup enhanced Speech Recognition with transcription timeout
    */
   setupSpeechRecognition() {
-    if (!this.recognition) return;
+    if (!this.recognition) {return;}
 
     this.recognition.onresult = (event) => {
       this.lastTranscriptionTime = Date.now();
@@ -285,8 +285,6 @@ class AudioManager {
     } else {
       await this.startBrowserRecognition();
     }
-
-    this.playSound('wake');
   }
 
   /**
@@ -314,11 +312,170 @@ class AudioManager {
   }
 
   /**
+   * Combine pre-buffer (WAV) and recorded audio (WebM/other) into single WAV blob
+   */
+  async combineAudioStreams(prebufferBlob, recordedBlob) {
+    try {
+      const audioContext = new AudioContext({ sampleRate: 16000 });
+      
+      // Decode both audio files
+      const [prebufferArrayBuffer, recordedArrayBuffer] = await Promise.all([
+        prebufferBlob.arrayBuffer(),
+        recordedBlob.arrayBuffer()
+      ]);
+      
+      const [prebufferAudioBuffer, recordedAudioBuffer] = await Promise.all([
+        audioContext.decodeAudioData(prebufferArrayBuffer),
+        audioContext.decodeAudioData(recordedArrayBuffer)
+      ]);
+      
+      // Create combined audio buffer
+      const totalLength = prebufferAudioBuffer.length + recordedAudioBuffer.length;
+      const combinedBuffer = audioContext.createBuffer(1, totalLength, 16000);
+      const combinedData = combinedBuffer.getChannelData(0);
+      
+      // Copy pre-buffer data
+      const prebufferData = prebufferAudioBuffer.getChannelData(0);
+      combinedData.set(prebufferData, 0);
+      
+      // Copy recorded data after pre-buffer
+      const recordedData = recordedAudioBuffer.getChannelData(0);
+      combinedData.set(recordedData, prebufferAudioBuffer.length);
+      
+      // Convert combined buffer to WAV
+      return this.audioBufferToWav(combinedBuffer);
+      
+    } catch (error) {
+      console.error('Error combining audio streams:', error);
+      // Fallback: just use the recorded audio
+      return recordedBlob;
+    }
+  }
+
+  /**
+   * Convert AudioBuffer to WAV blob
+   */
+  audioBufferToWav(audioBuffer) {
+    const length = audioBuffer.length;
+    const sampleRate = audioBuffer.sampleRate;
+    const buffer = new ArrayBuffer(44 + length * 2);
+    const view = new DataView(buffer);
+    const channelData = audioBuffer.getChannelData(0);
+    
+    // WAV header
+    const writeString = (offset, string) => {
+      for (let i = 0; i < string.length; i++) {
+        view.setUint8(offset + i, string.charCodeAt(i));
+      }
+    };
+    
+    writeString(0, 'RIFF');
+    view.setUint32(4, 36 + length * 2, true);
+    writeString(8, 'WAVE');
+    writeString(12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, 1, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * 2, true);
+    view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true);
+    writeString(36, 'data');
+    view.setUint32(40, length * 2, true);
+    
+    // Convert float to 16-bit PCM
+    for (let i = 0; i < length; i++) {
+      const sample = Math.max(-1, Math.min(1, channelData[i]));
+      view.setInt16(44 + i * 2, sample * 0x7fff, true);
+    }
+    
+    return new Blob([buffer], { type: 'audio/wav' });
+  }
+
+  /**
+   * Convert Float32Array audio chunks to WAV audio blob
+   */
+  convertBufferedAudioToWav(audioChunks, sampleRate = 16000) {
+    if (!audioChunks || audioChunks.length === 0) {
+      return null;
+    }
+
+    // Concatenate all chunks
+    const totalLength = audioChunks.reduce((acc, chunk) => acc + chunk.length, 0);
+    const combinedAudio = new Float32Array(totalLength);
+    let offset = 0;
+    
+    for (const chunk of audioChunks) {
+      combinedAudio.set(chunk, offset);
+      offset += chunk.length;
+    }
+
+    // Convert Float32 to 16-bit PCM
+    const pcmData = new Int16Array(totalLength);
+    for (let i = 0; i < totalLength; i++) {
+      const sample = Math.max(-1, Math.min(1, combinedAudio[i]));
+      pcmData[i] = sample * 0x7fff;
+    }
+
+    // Create WAV file
+    const buffer = new ArrayBuffer(44 + pcmData.length * 2);
+    const view = new DataView(buffer);
+    
+    // WAV header
+    const writeString = (offset, string) => {
+      for (let i = 0; i < string.length; i++) {
+        view.setUint8(offset + i, string.charCodeAt(i));
+      }
+    };
+    
+    writeString(0, 'RIFF');
+    view.setUint32(4, 36 + pcmData.length * 2, true);
+    writeString(8, 'WAVE');
+    writeString(12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, 1, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * 2, true);
+    view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true);
+    writeString(36, 'data');
+    view.setUint32(40, pcmData.length * 2, true);
+    
+    // Write PCM data
+    for (let i = 0; i < pcmData.length; i++) {
+      view.setInt16(44 + i * 2, pcmData[i], true);
+    }
+    
+    return new Blob([buffer], { type: 'audio/wav' });
+  }
+
+  /**
    * Start server-side recording for complete audio file
    */
   async startServerRecording() {
     try {
       console.log('Starting server recording for complete audio file...');
+      
+      // Get buffered audio from VAD service
+      const bufferedAudioChunks = this.vadService.getBufferedAudio();
+      console.log(`Using ${bufferedAudioChunks.length} buffered audio chunks for pre-recording`);
+      
+      // Convert buffered audio to WAV blob
+      this.prebufferBlob = null;
+      if (bufferedAudioChunks.length > 0) {
+        this.prebufferBlob = this.convertBufferedAudioToWav(bufferedAudioChunks, 16000);
+        console.log(`Created pre-buffer audio blob: ${this.prebufferBlob.size} bytes`);
+      }
+      
+      // Start server transcription session
+      if (this.websocket) {
+        console.log('📡 Starting server transcription session...');
+        const result = this.websocket.startServerTranscription();
+        console.log('📡 Start transcription result:', result);
+      } else {
+        console.error('❌ WebSocket not available for starting transcription');
+      }
       
       // Get microphone access
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -353,13 +510,13 @@ class AudioManager {
       };
 
       this.mediaRecorder.onstop = () => {
-        console.log('Server recording stopped, sending complete audio file');
-        this.sendCompleteAudioFile();
+        console.log('Server recording stopped, sending complete audio file with pre-buffer');
+        this.sendCompleteAudioFileWithBuffer();
         stream.getTracks().forEach(track => track.stop());
       };
 
       this.mediaRecorder.start();
-      console.log('✓ Server recording started');
+      console.log('✓ Server recording started with audio pre-buffer');
 
     } catch (error) {
       console.error('Error starting server recording:', error);
@@ -380,27 +537,49 @@ class AudioManager {
   }
 
   /**
-   * Send complete recorded audio file to server for transcription
+   * Send complete recorded audio file with pre-buffer to server for transcription
    */
-  async sendCompleteAudioFile() {
-    if (this.recordedChunks.length === 0) {
+  async sendCompleteAudioFileWithBuffer() {
+    if (this.recordedChunks.length === 0 && !this.prebufferBlob) {
       console.log('No recorded audio to send');
       return;
     }
 
     try {
-      // Combine all chunks into single blob
-      const audioBlob = new Blob(this.recordedChunks, { 
-        type: this.mediaRecorder.mimeType || 'audio/webm' 
-      });
+      let finalAudioBlob;
+      
+      if (this.prebufferBlob && this.recordedChunks.length > 0) {
+        // Combine pre-buffer with recorded audio
+        const recordedBlob = new Blob(this.recordedChunks, { 
+          type: this.mediaRecorder.mimeType || 'audio/webm' 
+        });
+        
+        console.log(`Combining pre-buffer (${this.prebufferBlob.size} bytes) with recording (${recordedBlob.size} bytes)`);
+        
+        // Properly combine audio streams using Web Audio API
+        finalAudioBlob = await this.combineAudioStreams(this.prebufferBlob, recordedBlob);
+        
+        console.log(`✓ Combined audio streams: ${finalAudioBlob.size} bytes total`);
+        
+      } else if (this.prebufferBlob) {
+        // Only pre-buffer available
+        finalAudioBlob = this.prebufferBlob;
+        console.log(`Using pre-buffer only: ${finalAudioBlob.size} bytes`);
+      } else {
+        // Only recorded audio available (fallback)
+        finalAudioBlob = new Blob(this.recordedChunks, { 
+          type: this.mediaRecorder.mimeType || 'audio/webm' 
+        });
+        console.log(`Using recorded audio only: ${finalAudioBlob.size} bytes`);
+      }
 
-      console.log(`Sending complete audio file: ${audioBlob.size} bytes`);
+      console.log(`Sending complete audio file with buffer: ${finalAudioBlob.size} bytes`);
 
       // Convert to base64 for transmission
       const reader = new FileReader();
       reader.onload = () => {
         const audioData = reader.result.split(',')[1]; // Remove data URL prefix
-        console.log(`Sending complete audio: ${audioData.length} base64 chars`);
+        console.log(`Sending buffered audio: ${audioData.length} base64 chars`);
         
         // Send complete audio file via WebSocket
         if (this.websocket) {
@@ -408,15 +587,24 @@ class AudioManager {
         }
       };
       
-      reader.readAsDataURL(audioBlob);
+      reader.readAsDataURL(finalAudioBlob);
       this.recordedChunks = [];
+      this.prebufferBlob = null;
 
     } catch (error) {
-      console.error('Error sending complete audio file:', error);
+      console.error('Error sending complete audio file with buffer:', error);
       if (this.onError) {
         this.onError(`Audio transmission failed: ${error.message}`);
       }
     }
+  }
+
+  /**
+   * Send complete recorded audio file to server for transcription (fallback method)
+   */
+  async sendCompleteAudioFile() {
+    // Redirect to buffered version for consistency
+    return this.sendCompleteAudioFileWithBuffer();
   }
 
   /**
@@ -506,7 +694,7 @@ class AudioManager {
   // Audio playback methods (unchanged from original)
   setupAudioInitialization() {
     const initAudio = () => {
-      if (this.audioInitialized) return;
+      if (this.audioInitialized) {return;}
 
       console.log('Initializing audio with user gesture for proper Android/Samsung routing');
 
@@ -550,7 +738,7 @@ class AudioManager {
 
     if (this.audioChunks.length === 0) {
       console.warn('No audio chunks to play');
-      if (onEnd) onEnd();
+      if (onEnd) {onEnd();}
       return;
     }
 
@@ -591,7 +779,7 @@ class AudioManager {
         }
         this.isPlaying = false;
         this.currentAudio = null;
-        if (onEnd) onEnd();
+        if (onEnd) {onEnd();}
       };
 
       audio.onerror = (e) => {
@@ -602,7 +790,7 @@ class AudioManager {
         }
         this.isPlaying = false;
         this.currentAudio = null;
-        if (onEnd) onEnd();
+        if (onEnd) {onEnd();}
       };
 
       this.isPlaying = true;
@@ -612,7 +800,7 @@ class AudioManager {
     } catch (error) {
       console.error('Error playing TTS stream:', error);
       this.isPlaying = false;
-      if (onEnd) onEnd();
+      if (onEnd) {onEnd();}
     }
   }
 
@@ -671,7 +859,7 @@ class AudioManager {
   }
 
   speakText(text) {
-    if (!window.speechSynthesis || !text) return;
+    if (!window.speechSynthesis || !text) {return;}
 
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.rate = this.speechRate || 1.0;
@@ -705,7 +893,7 @@ class AudioManager {
   }
 
   playSound(soundName) {
-    if (!this.soundsEnabled) return;
+    if (!this.soundsEnabled) {return;}
 
     const sound = this.sounds[soundName];
     if (sound) {
@@ -773,6 +961,47 @@ class AudioManager {
 
   getCurrentEngine() {
     return this.currentEngine;
+  }
+
+  getEngineStatus(engine) {
+    const available = this.engineAvailability[engine];
+    const isActive = this.currentEngine === engine;
+        
+    if (isActive) {
+      return { status: 'active', text: 'Active', class: 'badge-success' };
+    } else if (available) {
+      return { status: 'available', text: 'Available', class: 'badge-info' };
+    } else {
+      return { status: 'unavailable', text: 'Unavailable', class: 'badge-error' };
+    }
+  }
+
+  getEngineAvailability() {
+    return { ...this.engineAvailability };
+  }
+
+  /**
+   * Set keywords for detection
+   */
+  setKeywords(keywords) {
+    if (Array.isArray(keywords)) {
+      this.keywordDetector.updateKeywords(keywords);
+    } else if (typeof keywords === 'string') {
+      this.keywordDetector.updateKeywords([keywords]);
+    }
+  }
+
+  /**
+   * Set VAD silence timeout
+   */
+  setSilenceTimeout(timeoutMs) {
+    // Update the silence timeout for both VAD and Speech API
+    if (this.vadService) {
+      this.vadService.silenceTimeout = timeoutMs;
+    }
+    // Store for future use
+    this.silenceTimeout = timeoutMs;
+    console.log(`Silence timeout updated: ${timeoutMs}ms`);
   }
 
   static checkCompatibility() {
