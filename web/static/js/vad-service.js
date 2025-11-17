@@ -24,6 +24,11 @@ class VADService {
     this.vadHangoverCounter = 0;
     this.VAD_HANGOVER_FRAMES = 12;
     
+    // Audio buffering for capturing speech before VAD trigger
+    this.audioBuffer = [];
+    this.BUFFER_DURATION_MS = 750; // 750ms of pre-buffer
+    this.MAX_BUFFER_CHUNKS = Math.ceil(this.BUFFER_DURATION_MS / (this.frameSize / this.sampleRate * 1000)); // ~9 chunks for 750ms
+    
     // Configurable settings
     this.vadThreshold = 0.5;
     
@@ -123,6 +128,35 @@ class VADService {
 
     this.isSpeechActive = false;
     this.vadHangoverCounter = 0;
+    this.audioBuffer = [];
+  }
+
+  /**
+   * Add audio chunk to circular buffer for pre-recording
+   */
+  addToAudioBuffer(chunk) {
+    // Create copy of the chunk to avoid reference issues
+    const chunkCopy = new Float32Array(chunk);
+    this.audioBuffer.push(chunkCopy);
+    
+    // Maintain circular buffer - remove old chunks when buffer exceeds max size
+    if (this.audioBuffer.length > this.MAX_BUFFER_CHUNKS) {
+      this.audioBuffer.shift();
+    }
+  }
+
+  /**
+   * Get buffered audio chunks for pre-recording
+   */
+  getBufferedAudio() {
+    return [...this.audioBuffer]; // Return copy to prevent external modification
+  }
+
+  /**
+   * Clear audio buffer
+   */
+  clearAudioBuffer() {
+    this.audioBuffer = [];
   }
 
   /**
@@ -181,7 +215,10 @@ class VADService {
       // Set up audio processing with speech detection
       this.workletNode.port.onmessage = async (event) => {
         const chunk = event.data;
-        if (!chunk) return;
+        if (!chunk) {return;}
+        
+        // Always buffer audio chunks for pre-recording
+        this.addToAudioBuffer(chunk);
         
         const vadFired = await this.runVad(chunk);
         
@@ -189,9 +226,9 @@ class VADService {
         if (vadFired) {
           if (!this.isSpeechActive) {
             this.isSpeechActive = true;
-            console.log('🎤 Speech detected - starting recording');
+            console.log('🎤 Speech detected - starting recording with pre-buffer');
             
-            // Emit speech start event
+            // Emit speech start event with buffered audio available
             if (this.onSpeechStart) {
               this.onSpeechStart();
             }
@@ -294,6 +331,18 @@ class VADService {
     if (settings.vadHangoverFrames !== undefined) {
       this.VAD_HANGOVER_FRAMES = settings.vadHangoverFrames;
       console.log(`VAD hangover frames updated to: ${this.VAD_HANGOVER_FRAMES}`);
+    }
+
+    // Update audio buffer duration
+    if (settings.bufferDurationMs !== undefined) {
+      this.BUFFER_DURATION_MS = settings.bufferDurationMs;
+      this.MAX_BUFFER_CHUNKS = Math.ceil(this.BUFFER_DURATION_MS / (this.frameSize / this.sampleRate * 1000));
+      console.log(`Audio buffer duration updated to: ${this.BUFFER_DURATION_MS}ms (${this.MAX_BUFFER_CHUNKS} chunks)`);
+      
+      // Trim existing buffer if it's now too large
+      while (this.audioBuffer.length > this.MAX_BUFFER_CHUNKS) {
+        this.audioBuffer.shift();
+      }
     }
   }
 

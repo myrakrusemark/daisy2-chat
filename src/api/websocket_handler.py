@@ -379,16 +379,13 @@ class WebSocketHandler:
                 try:
                     loop = asyncio.get_event_loop()
                     
-                    # Check if keyword was found
+                    # Log keyword detection result (client will handle the actual processing)
                     if result.keyword_found:
-                        log.info(f"✓ Keyword '{result.keyword_matched}' detected in server transcription")
-                        # Submit the command part only
-                        command_text = result.command_text if result.command_text.strip() else result.text
-                        loop.create_task(self.handle_user_message(command_text))
+                        log.info(f"✓ Server detected keyword '{result.keyword_matched}' - sending to client for processing")
                     else:
-                        log.info(f"No keywords found in server transcription, discarding: '{result.text[:50]}...'")
+                        log.info(f"No keywords found in server transcription: '{result.text[:50]}...'")
                     
-                    # Also send the result to browser for debugging/feedback
+                    # Send transcription result to client for keyword processing
                     loop.create_task(self.send_message({
                         "type": "server_transcription_result",
                         "text": result.text,
@@ -514,6 +511,7 @@ class WebSocketHandler:
             message_data: Parsed JSON message from client
         """
         message_type = message_data.get("type")
+        log.debug(f"Received WebSocket message: {message_type}")
 
         if message_type == "user_message":
             await self.handle_user_message(message_data.get("content", ""))
@@ -525,6 +523,7 @@ class WebSocketHandler:
             await self.handle_config_update(message_data.get("config", {}))
 
         elif message_type == "start_server_transcription":
+            log.info("🚀 Handling start_server_transcription message")
             await self.handle_start_server_transcription()
 
         elif message_type == "stop_server_transcription":

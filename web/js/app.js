@@ -671,20 +671,20 @@ class ClaudeAssistant {
     const { type, ...data } = event.data;
 
     switch (type) {
-      case 'init':
-        this.handleAppInit(data);
-        break;
+    case 'init':
+      this.handleAppInit(data);
+      break;
 
-      case 'transcript':
-        this.handleAppTranscript(data);
-        break;
+    case 'transcript':
+      this.handleAppTranscript(data);
+      break;
 
-      case 'status':
-        this.handleAppStatus(data);
-        break;
+    case 'status':
+      this.handleAppStatus(data);
+      break;
 
-      default:
-        console.log('Unknown message type from app:', type, data);
+    default:
+      console.log('Unknown message type from app:', type, data);
     }
   }
 
@@ -735,23 +735,23 @@ class ClaudeAssistant {
 
     // Update UI based on app status
     switch (status) {
-      case 'recording':
-        this.ui.setStatus('App is recording...', 'processing');
-        break;
-      case 'listening':
-        this.ui.setStatus('App is listening for wake word...');
-        break;
-      case 'processing':
-        this.ui.setStatus('App is processing...', 'processing');
-        break;
-      case 'ready':
-        this.ui.setStatus('App ready');
-        break;
-      case 'timeout':
-        this.ui.setStatus('App listening timeout');
-        break;
-      default:
-        this.ui.setStatus(`App status: ${status}`);
+    case 'recording':
+      this.ui.setStatus('App is recording...', 'processing');
+      break;
+    case 'listening':
+      this.ui.setStatus('App is listening for wake word...');
+      break;
+    case 'processing':
+      this.ui.setStatus('App is processing...', 'processing');
+      break;
+    case 'ready':
+      this.ui.setStatus('App ready');
+      break;
+    case 'timeout':
+      this.ui.setStatus('App listening timeout');
+      break;
+    default:
+      this.ui.setStatus(`App status: ${status}`);
     }
   }
 

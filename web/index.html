@@ -29,10 +29,10 @@
                     <span id="session-id" class="text-sm font-mono opacity-70 ml-2">Connecting...</span>
                 </div>
                 <div class="flex-none gap-2 flex items-center">
-                    <!-- Wake Word Toggle -->
+                    <!-- Keyword Listening Toggle -->
                     <div class="form-control">
                         <label class="label cursor-pointer gap-2">
-                            <span class="label-text text-xs">Wake Word</span>
+                            <span class="label-text text-xs">Listen for Keyword</span>
                             <input type="checkbox" id="wake-word-toggle" class="toggle toggle-sm" />
                         </label>
                     </div>
@@ -206,39 +206,27 @@
 
                     <div class="divider my-2"></div>
 
-                    <!-- Wake Word Tuning -->
+                    <!-- Keyword Listening -->
                     <div class="space-y-3">
                         <div class="flex items-center gap-2 mb-3">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4" />
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
                             </svg>
-                            <span class="font-semibold text-sm">Wake Word Tuning</span>
+                            <span class="font-semibold text-sm">Keyword Listening</span>
                         </div>
 
-                        <!-- Detection Threshold -->
+                        <!-- Keyword Variations -->
                         <div class="form-control">
                             <label class="label py-1">
-                                <span class="label-text text-xs">Detection Threshold</span>
-                                <span class="label-text-alt text-xs" id="threshold-display">0.50</span>
+                                <span class="label-text text-xs">Keywords & Variations</span>
                             </label>
-                            <input type="range" id="detection-threshold" min="0.1" max="0.8" value="0.5" step="0.05" class="range range-xs range-primary" />
-                            <div class="w-full flex justify-between text-xs px-2 opacity-60">
-                                <span>Sensitive</span>
-                                <span>Strict</span>
-                            </div>
-                        </div>
-
-                        <!-- Input Gain -->
-                        <div class="form-control">
-                            <label class="label py-1">
-                                <span class="label-text text-xs">Input Gain</span>
-                                <span class="label-text-alt text-xs" id="input-gain-display">100%</span>
+                            <textarea id="keyword-input" rows="3" placeholder="hey daisy&#10;he doesn't&#10;hay daisy&#10;hey dazy" class="textarea textarea-bordered text-xs resize-none">hey daisy
+he doesn't
+hay daisy
+hey dazy</textarea>
+                            <label class="label">
+                                <span class="label-text-alt text-xs">Enter keyword variations (one per line). Include common speech recognition mishears.</span>
                             </label>
-                            <input type="range" id="input-gain" min="0.5" max="3.0" value="1.0" step="0.1" class="range range-xs range-primary" />
-                            <div class="w-full flex justify-between text-xs px-2 opacity-60">
-                                <span>50%</span>
-                                <span>300%</span>
-                            </div>
                         </div>
 
                         <!-- VAD Sensitivity -->
@@ -248,39 +236,80 @@
                                 <span class="label-text-alt text-xs" id="vad-sensitivity-display">0.50</span>
                             </label>
                             <input type="range" id="vad-sensitivity" min="0.2" max="0.8" value="0.5" step="0.05" class="range range-xs range-primary" />
-                            <div class="w-full flex justify-between text-xs px-2 opacity-60">
-                                <span>High</span>
-                                <span>Low</span>
+                            <div class="w-full flex justify-between text-xs opacity-60" style="margin-top: 4px; padding: 0 4px;">
+                                <span style="flex: 1 0 auto;">High</span>
+                                <span style="flex: 0 0 auto;">Low</span>
                             </div>
                         </div>
 
-                        <!-- VAD Hangover -->
+                        <!-- Recording Timeout -->
                         <div class="form-control">
                             <label class="label py-1">
-                                <span class="label-text text-xs">VAD Hangover</span>
-                                <span class="label-text-alt text-xs" id="vad-hangover-display">12 frames</span>
+                                <span class="label-text text-xs">Recording Timeout</span>
+                                <span class="label-text-alt text-xs" id="recording-timeout-display">2.0s</span>
                             </label>
-                            <input type="range" id="vad-hangover" min="5" max="25" value="12" step="1" class="range range-xs range-primary" />
-                            <div class="w-full flex justify-between text-xs px-2 opacity-60">
-                                <span>Quick</span>
-                                <span>Slow</span>
+                            <input type="range" id="recording-timeout" min="1.0" max="5.0" value="2.0" step="0.5" class="range range-xs range-primary" />
+                            <div class="w-full flex justify-between text-xs opacity-60" style="margin-top: 4px; padding: 0 4px;">
+                                <span style="flex: 1 0 auto;">1s</span>
+                                <span style="flex: 0 0 auto;">5s</span>
                             </div>
                         </div>
 
-                        <!-- Save Button -->
-                        <div class="flex gap-2 pt-2">
-                            <button id="btn-apply-tuning" class="btn btn-primary btn-xs flex-1">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <!-- Pre-Buffer Duration -->
+                        <div class="form-control">
+                            <label class="label py-1">
+                                <span class="label-text text-xs">Pre-Buffer Duration</span>
+                                <span class="label-text-alt text-xs" id="buffer-duration-display">750ms</span>
+                            </label>
+                            <input type="range" id="buffer-duration" min="250" max="1500" value="750" step="250" class="range range-xs range-secondary" />
+                            <div class="w-full flex justify-between text-xs opacity-60" style="margin-top: 4px; padding: 0 4px;">
+                                <span style="flex: 1 0 auto;">250ms</span>
+                                <span style="flex: 0 0 auto;">1500ms</span>
+                            </div>
+                            <label class="label">
+                                <span class="label-text-alt text-xs">Audio captured before speech detection (server mode only). Browser Speech API may miss first syllables.</span>
+                            </label>
+                        </div>
+
+                        <!-- Apply Settings -->
+                        <div class="flex gap-1 pt-2">
+                            <button id="btn-apply-keyword-settings" class="btn btn-primary btn-xs flex-1" style="font-size: 11px; padding: 4px 8px; height: 24px;">
+                                <svg xmlns="http://www.w3.org/2000/svg" style="width: 10px; height: 10px;" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
                                 </svg>
                                 Apply
                             </button>
-                            <button id="btn-reset-tuning" class="btn btn-ghost btn-xs">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <button id="btn-reset-keyword-settings" class="btn btn-ghost btn-xs" style="font-size: 11px; padding: 4px 8px; height: 24px;">
+                                <svg xmlns="http://www.w3.org/2000/svg" style="width: 10px; height: 10px;" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                                 </svg>
                                 Reset
                             </button>
+                        </div>
+                    </div>
+
+                    <div class="divider my-2"></div>
+
+                    <!-- Auto-Session Timeout -->
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text font-semibold">Auto-Session Timeout</span>
+                        </label>
+                        <div class="space-y-2">
+                            <div class="form-control">
+                                <label class="label py-1">
+                                    <span class="label-text text-xs">Timeout Duration</span>
+                                    <span class="label-text-alt text-xs" id="auto-session-timeout-display">15 minutes</span>
+                                </label>
+                                <input type="range" id="auto-session-timeout" min="0" max="60" value="15" step="1" class="range range-xs range-primary" />
+                                <div class="w-full flex justify-between text-xs opacity-60" style="margin-top: 4px; padding: 0 4px;">
+                                    <span style="flex: 1 0 auto;">Disabled</span>
+                                    <span style="flex: 0 0 auto;">60min</span>
+                                </div>
+                                <label class="label">
+                                    <span class="label-text-alt text-xs">Automatically creates a new session after inactivity. Only starts after you speak once. Set to 0 to disable.</span>
+                                </label>
+                            </div>
                         </div>
                     </div>
 

@@ -448,6 +448,16 @@ class UIComponents {
       minute: '2-digit'
     });
   }
+
+  /**
+   * Show auto-session notification (brief status update)
+   */
+  showAutoSessionNotification() {
+    this.setStatus('Auto-creating new session after inactivity...');
+    
+    // The createNewSession() method will update status to "Creating new session..."
+    // so this provides a brief intermediate notification
+  }
 }
 
 // Export for use in other modules

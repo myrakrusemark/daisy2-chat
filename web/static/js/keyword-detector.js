@@ -6,18 +6,14 @@
  */
 
 class KeywordDetector {
-  constructor(keywords = window.CLAUDE_CONSTANTS?.DEFAULT_KEYWORDS || ['hey daisy', 'daisy']) {
-    this.keywords = keywords.map(k => k.toLowerCase().trim());
+  constructor(keywords = window.CLAUDE_CONSTANTS?.DEFAULT_KEYWORDS || ['hey daisy']) {
     this.caseSensitive = false;
     this.fuzzyMatching = true;
     
-    // Fuzzy matching variations for common speech recognition errors
-    this.keywordVariations = {
-      'hey daisy': ['hey daisy', 'hay daisy', 'hey daisey', 'hay daisey', 'hey dazy', 'hai daisy'],
-      'daisy': ['daisy', 'daisey', 'dazy', 'daisie']
-    };
+    // Initialize with provided keywords (now supports multiple variations)
+    this.setKeywords(keywords);
     
-    console.log(`Keyword detector initialized with keywords: ${this.keywords.join(', ')}`);
+    console.log(`Keyword detector initialized with keywords: ${this.getAllVariations().join(', ')}`);
   }
 
   /**
@@ -30,21 +26,22 @@ class KeywordDetector {
       return { found: false, fullText: transcription || '' };
     }
 
-    const text = this.caseSensitive ? transcription.trim() : transcription.toLowerCase().trim();
+    const normalizedText = this._normalizeText(transcription);
     
-    console.log(`Checking for keywords in: "${text}"`);
+    console.log(`Checking for keywords in: "${normalizedText}"`);
+    console.log(`Available keyword variations: [${this.keywords.join(', ')}]`);
 
-    // Check each configured keyword
+    // Check each configured keyword variation
     for (const keyword of this.keywords) {
-      const result = this._checkKeywordMatch(text, keyword);
+      const result = this._checkKeywordMatch(normalizedText, keyword);
       if (result.found) {
-        console.log(`✓ Keyword detected: "${keyword}" in "${text}"`);
+        console.log(`✓ Keyword detected: "${keyword}" matched in "${normalizedText}"`);
         return result;
       }
     }
 
-    console.log(`No keywords found in: "${text}"`);
-    return { found: false, fullText: text, checkedKeywords: this.keywords };
+    console.log(`No keywords found in: "${normalizedText}"`);
+    return { found: false, fullText: normalizedText, checkedKeywords: this.keywords };
   }
 
   /**
@@ -52,51 +49,96 @@ class KeywordDetector {
    * @private
    */
   _checkKeywordMatch(text, keyword) {
-    const variations = this.fuzzyMatching ? this._getKeywordVariations(keyword) : [keyword];
+    const normalizedKeyword = this._normalizeText(keyword);
+    const matchIndex = text.indexOf(normalizedKeyword);
     
-    for (const variation of variations) {
-      const matchIndex = text.indexOf(variation);
-      if (matchIndex !== -1) {
-        // Extract command text after the keyword
-        const commandStartIndex = matchIndex + variation.length;
-        const commandText = text.substring(commandStartIndex).trim();
-        
-        return {
-          found: true,
-          keyword: keyword,
-          matchedVariation: variation,
-          matchIndex: matchIndex,
-          command: commandText,
-          fullText: text,
-          confidence: variation === keyword ? 1.0 : 0.9 // Lower confidence for fuzzy matches
-        };
-      }
+    if (matchIndex !== -1) {
+      // Extract command text after the keyword
+      const commandStartIndex = matchIndex + normalizedKeyword.length;
+      const rawCommandText = text.substring(commandStartIndex);
+      const commandText = this._cleanCommandText(rawCommandText);
+      
+      return {
+        found: true,
+        keyword: keyword,
+        matchedVariation: normalizedKeyword,
+        matchIndex: matchIndex,
+        command: commandText,
+        fullText: text,
+        confidence: 1.0
+      };
     }
     
     return { found: false };
   }
 
   /**
-   * Get variations of a keyword for fuzzy matching
+   * Clean command text by removing leading punctuation/whitespace and capitalizing first letter
    * @private
    */
-  _getKeywordVariations(keyword) {
-    const variations = this.keywordVariations[keyword] || [keyword];
-    return [...new Set(variations)]; // Remove duplicates
+  _cleanCommandText(rawText) {
+    if (!rawText || typeof rawText !== 'string') {
+      return '';
+    }
+    
+    // Remove leading whitespace and punctuation
+    const cleaned = rawText.replace(/^[\s.,!?;:'"()[\]{}\-_+=*&^%$#@~`|\\/<>]+/, '').trim();
+    
+    // Capitalize first letter if text exists
+    if (cleaned.length > 0) {
+      return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+    }
+    
+    return cleaned;
   }
 
   /**
-   * Update keyword configuration
+   * Normalize text for consistent matching (lowercase, strip punctuation, trim whitespace)
+   * @private
+   */
+  _normalizeText(text) {
+    if (!text || typeof text !== 'string') {
+      return '';
+    }
+    
+    return text
+      .toLowerCase()
+      .replace(/[^\w\s]/g, '') // Remove punctuation
+      .replace(/\s+/g, ' ')    // Normalize whitespace
+      .trim();
+  }
+
+  /**
+   * Get all keyword variations as a flat array
+   */
+  getAllVariations() {
+    return [...this.keywords];
+  }
+
+  /**
+   * Update keyword configuration - supports both arrays and strings
    */
   updateKeywords(keywords) {
+    if (typeof keywords === 'string') {
+      // Parse string input (newline or comma-separated)
+      keywords = keywords.split(/[\n,]/).map(k => k.trim()).filter(k => k.length > 0);
+    }
+    
     if (!Array.isArray(keywords)) {
-      console.error('Keywords must be an array');
+      console.error('Keywords must be an array or string');
       return false;
     }
     
-    this.keywords = keywords.map(k => k.toLowerCase().trim()).filter(k => k.length > 0);
+    this.keywords = keywords.map(k => k.trim()).filter(k => k.length > 0);
     console.log(`Keywords updated: ${this.keywords.join(', ')}`);
     return true;
+  }
+
+  /**
+   * Set keywords (alias for updateKeywords for consistency)
+   */
+  setKeywords(keywords) {
+    return this.updateKeywords(keywords);
   }
 
   /**

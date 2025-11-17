@@ -77,11 +77,11 @@ export function applyState(stateName) {
   // Update status text if element exists
   const statusDisplay = document.getElementById('status-display');
   if (statusDisplay) {
-    // For idle state, check wake word toggle
+    // For idle state, check VAD toggle
     if (stateName === 'idle') {
       const wakeWordToggle = document.getElementById('wake-word-toggle');
       if (wakeWordToggle && wakeWordToggle.checked) {
-        statusDisplay.textContent = window.CLAUDE_CONSTANTS.WAKE_WORD_LISTENING_MESSAGE();
+        statusDisplay.textContent = window.CLAUDE_CONSTANTS.VAD_LISTENING_MESSAGE();
       } else {
         statusDisplay.textContent = window.CLAUDE_CONSTANTS.READY_MESSAGE;
       }

@@ -8,7 +8,8 @@ const {
   VAD_LISTENING_MESSAGE, 
   STT_ENGINES,
   STT_ENGINE_NAMES,
-  DEFAULT_STT_ENGINE 
+  DEFAULT_STT_ENGINE,
+  AUTO_SESSION_TIMEOUT_MINUTES
 } = window.CLAUDE_CONSTANTS;
 
 class ClaudeAssistant {
@@ -30,6 +31,11 @@ class ClaudeAssistant {
     this.isAndroidApp = false;
     this.appVersion = null;
     this.appCapabilities = [];
+
+    // Auto-session timeout state
+    this.autoSessionTimer = null;
+    this.userHasSpoken = false;
+    this.autoSessionTimeoutMinutes = AUTO_SESSION_TIMEOUT_MINUTES;
 
     // Initialize Android app detection
     this.initializeAppDetection();
@@ -80,6 +86,9 @@ class ClaudeAssistant {
     
     // Load buffer duration from localStorage
     this.loadBufferDurationSetting();
+    
+    // Load auto-session timeout setting
+    this.loadAutoSessionTimeoutSetting();
   }
 
   /**
@@ -107,7 +116,22 @@ class ClaudeAssistant {
      * Load wake word tuning settings from cookies
      */
   loadWakeWordTuningSettings() {
-    // Default values
+    // Load keywords from localStorage (new multi-line format)
+    const defaultKeywords = `hey daisy
+he doesn't
+hay daisy
+hey dazy`;
+    const savedKeywords = localStorage.getItem('claudeKeywords') || defaultKeywords;
+    
+    // Update keyword textarea
+    const keywordInput = document.getElementById('keyword-input');
+    if (keywordInput) {
+      keywordInput.value = savedKeywords;
+      // Apply the loaded keywords
+      this.audio.setKeywords(savedKeywords);
+    }
+    
+    // Default values for other settings
     const defaults = {
       detectionThreshold: 0.5,
       inputGain: 1.0,
@@ -115,7 +139,7 @@ class ClaudeAssistant {
       vadHangover: 12
     };
 
-    // Load from cookies or use defaults
+    // Load from cookies or use defaults  
     const detectionThreshold = parseFloat(this.getCookie('wakeWordDetectionThreshold')) || defaults.detectionThreshold;
     const inputGain = parseFloat(this.getCookie('wakeWordInputGain')) || defaults.inputGain;
     const vadSensitivity = parseFloat(this.getCookie('wakeWordVadSensitivity')) || defaults.vadSensitivity;
@@ -185,6 +209,29 @@ class ClaudeAssistant {
     }
     
     console.log(`Buffer duration loaded: ${bufferDuration}ms`);
+  }
+
+  /**
+   * Load auto-session timeout setting from localStorage
+   */
+  loadAutoSessionTimeoutSetting() {
+    const savedTimeout = localStorage.getItem('autoSessionTimeoutMinutes');
+    const timeoutMinutes = savedTimeout ? parseInt(savedTimeout) : AUTO_SESSION_TIMEOUT_MINUTES;
+    
+    this.autoSessionTimeoutMinutes = timeoutMinutes;
+    
+    // Update UI elements
+    const timeoutSlider = document.getElementById('auto-session-timeout');
+    const timeoutDisplay = document.getElementById('auto-session-timeout-display');
+    
+    if (timeoutSlider) {
+      timeoutSlider.value = timeoutMinutes;
+    }
+    if (timeoutDisplay) {
+      timeoutDisplay.textContent = timeoutMinutes === 0 ? 'Disabled' : `${timeoutMinutes} minute${timeoutMinutes === 1 ? '' : 's'}`;
+    }
+    
+    console.log(`Auto-session timeout loaded: ${timeoutMinutes} minutes`);
   }
 
   /**
@@ -518,6 +565,9 @@ class ClaudeAssistant {
             
       // Resume wake word detection on error
       this.resumeVADAfterProcessing();
+      
+      // Restart auto-session timer on error
+      this.resetAutoSessionTimer();
     };
 
     // TTS streaming callbacks
@@ -556,6 +606,9 @@ class ClaudeAssistant {
                     
           // Resume wake word detection now that TTS is complete
           this.resumeVADAfterProcessing();
+          
+          // Restart auto-session timer now that processing is complete
+          this.resetAutoSessionTimer();
         } else {
           // Reset flag for next TTS and return to processing state
           // (Claude is still working on the full response)
@@ -609,6 +662,10 @@ class ClaudeAssistant {
     // Audio callbacks
     this.audio.onTranscript = (transcript) => {
       this.handleTranscript(transcript);
+    };
+
+    this.audio.onTranscriptDiscarded = (transcript) => {
+      this.handleTranscriptDiscarded(transcript);
     };
 
     this.audio.onInterimTranscript = (transcript) => {
@@ -828,6 +885,15 @@ class ClaudeAssistant {
     document.getElementById('btn-reset-tuning')?.addEventListener('click', () => {
       this.resetWakeWordTuning();
     });
+
+    // Auto-session timeout controls
+    const autoSessionSlider = document.getElementById('auto-session-timeout');
+    const autoSessionDisplay = document.getElementById('auto-session-timeout-display');
+    autoSessionSlider?.addEventListener('input', () => {
+      const minutes = parseInt(autoSessionSlider.value);
+      autoSessionDisplay.textContent = minutes === 0 ? 'Disabled' : `${minutes} minute${minutes === 1 ? '' : 's'}`;
+      this.setAutoSessionTimeout(minutes);
+    });
   }
 
   /**
@@ -932,6 +998,10 @@ class ClaudeAssistant {
     // Stop listening
     this.stopListening();
 
+    // Mark that user has spoken and reset auto-session timer
+    this.userHasSpoken = true;
+    this.resetAutoSessionTimer();
+
     // Add user message to UI (this will handle interim message finalization)
     this.ui.addUserMessage(transcript);
 
@@ -940,9 +1010,34 @@ class ClaudeAssistant {
       // Enter processing state (vibrant violet) - disables push-to-talk and wake-word
       applyState('processing');
       this.isProcessing = true;
+      
+      // Stop auto-session timer during processing to prevent interruption
+      this.stopAutoSessionTimer();
+      
       this.ws.sendUserMessage(transcript);
     } else {
       this.ui.setStatus('Not connected to server', 'error');
+    }
+  }
+
+  /**
+   * Handle discarded transcript (no keywords found)
+   */
+  handleTranscriptDiscarded(transcript) {
+    console.log(`Transcript discarded - no keywords found: "${transcript}"`);
+    
+    // Clear interim message
+    this.ui.clearInterimUserMessage();
+    
+    // Return to idle state - VAD continues listening
+    if (this.activationMode === 'vad-continuous') {
+      // VAD continues running, just update status
+      this.ui.setStatus(VAD_LISTENING_MESSAGE());
+      applyState('idle');
+    } else {
+      // Other modes return to idle
+      applyState('idle');
+      this.ui.setStatus(READY_MESSAGE);
     }
   }
 
@@ -1017,6 +1112,10 @@ class ClaudeAssistant {
      * Create new session
      */
   async createNewSession() {
+    // Stop auto-session timer and reset state
+    this.stopAutoSessionTimer();
+    this.userHasSpoken = false;
+    
     // Disconnect current WebSocket
     if (this.ws) {
       this.ws.disconnect();
@@ -1426,15 +1525,15 @@ class ClaudeAssistant {
    * Setup keyword listening controls
    */
   setupKeywordControls() {
-    // Keyword input
+    // Keyword input (now textarea for multiple variations)
     const keywordInput = document.getElementById('keyword-input');
     if (keywordInput) {
       keywordInput.addEventListener('input', (e) => {
-        // Update keyword in real-time
-        const keyword = e.target.value.trim().toLowerCase();
-        if (keyword) {
-          this.audio.setKeywords([keyword]);
-          console.log(`Keyword updated: "${keyword}"`);
+        // Update keywords in real-time (support multiple variations)
+        const keywordText = e.target.value.trim();
+        if (keywordText) {
+          this.audio.setKeywords(keywordText); // KeywordDetector now handles string parsing
+          console.log('Keywords updated from textarea');
         }
       });
     }
@@ -1496,14 +1595,14 @@ class ClaudeAssistant {
     const bufferDuration = document.getElementById('buffer-duration');
 
     if (keywordInput) {
-      const keywords = keywordInput.value.trim().toLowerCase();
-      if (keywords) {
-        // Update keywords in audio manager and keyword detector
-        this.audio.setKeywords(keywords.split(',').map(k => k.trim()));
+      const keywordText = keywordInput.value.trim();
+      if (keywordText) {
+        // Update keywords in audio manager (supports multiple variations)
+        this.audio.setKeywords(keywordText);
         
         // Save to localStorage
-        localStorage.setItem('claudeKeywords', keywords);
-        console.log(`✓ Keywords applied: "${keywords}"`);
+        localStorage.setItem('claudeKeywords', keywordText);
+        console.log(`✓ Keywords applied: ${keywordText.split('\n').length} variations`);
       }
     }
 
@@ -1550,7 +1649,10 @@ class ClaudeAssistant {
     const bufferDuration = document.getElementById('buffer-duration');
 
     if (keywordInput) {
-      keywordInput.value = 'hey daisy';
+      keywordInput.value = `hey daisy
+he doesn't
+hay daisy
+hey dazy`;
     }
     if (vadSensitivity) {
       vadSensitivity.value = '0.5';
@@ -1584,6 +1686,61 @@ class ClaudeAssistant {
      */
   hasAppCapability(capability) {
     return this.appCapabilities.includes(capability);
+  }
+
+  /**
+   * Start auto-session timer (only if timeout > 0 and user has spoken)
+   */
+  startAutoSessionTimer() {
+    // Clear any existing timer
+    this.stopAutoSessionTimer();
+    
+    // Only start if timeout is enabled (> 0) and user has spoken
+    if (this.autoSessionTimeoutMinutes > 0 && this.userHasSpoken) {
+      const timeoutMs = this.autoSessionTimeoutMinutes * 60 * 1000;
+      console.log(`Starting auto-session timer: ${this.autoSessionTimeoutMinutes} minutes`);
+      
+      this.autoSessionTimer = setTimeout(() => {
+        console.log('Auto-session timeout triggered - creating new session');
+        this.ui.showAutoSessionNotification();
+        this.createNewSession();
+      }, timeoutMs);
+    }
+  }
+
+  /**
+   * Stop auto-session timer
+   */
+  stopAutoSessionTimer() {
+    if (this.autoSessionTimer) {
+      clearTimeout(this.autoSessionTimer);
+      this.autoSessionTimer = null;
+      console.log('Auto-session timer stopped');
+    }
+  }
+
+  /**
+   * Reset auto-session timer (restart if conditions are met)
+   */
+  resetAutoSessionTimer() {
+    if (this.userHasSpoken && this.autoSessionTimeoutMinutes > 0) {
+      this.startAutoSessionTimer();
+    }
+  }
+
+  /**
+   * Update auto-session timeout setting
+   */
+  setAutoSessionTimeout(minutes) {
+    this.autoSessionTimeoutMinutes = minutes;
+    
+    // Save to localStorage
+    localStorage.setItem('autoSessionTimeoutMinutes', minutes.toString());
+    
+    // Restart timer with new timeout if conditions are met
+    this.resetAutoSessionTimer();
+    
+    console.log(`Auto-session timeout updated: ${minutes} minutes`);
   }
 }
 

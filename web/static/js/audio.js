@@ -244,6 +244,10 @@ class AudioManager {
         }
       } else {
         console.log(`No keywords found in transcript, discarding: "${transcript}"`);
+        // Notify app that transcript was discarded
+        if (this.onTranscriptDiscarded) {
+          this.onTranscriptDiscarded(transcript);
+        }
       }
     }
 
@@ -730,6 +734,10 @@ class AudioManager {
           }
         } else {
           console.log(`Server: No keywords found in transcript, discarding: "${transcript}"`);
+          // Notify app that transcript was discarded
+          if (this.onTranscriptDiscarded) {
+            this.onTranscriptDiscarded(transcript);
+          }
         }
       }
       
@@ -1031,11 +1039,8 @@ class AudioManager {
    * Set keywords for detection
    */
   setKeywords(keywords) {
-    if (Array.isArray(keywords)) {
-      this.keywordDetector.updateKeywords(keywords);
-    } else if (typeof keywords === 'string') {
-      this.keywordDetector.updateKeywords([keywords]);
-    }
+    // KeywordDetector.updateKeywords now handles both strings and arrays
+    this.keywordDetector.updateKeywords(keywords);
   }
 
   /**

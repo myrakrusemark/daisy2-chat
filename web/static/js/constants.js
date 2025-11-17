@@ -42,5 +42,8 @@ window.CLAUDE_CONSTANTS = {
   },
     
   // Default STT engine preference
-  DEFAULT_STT_ENGINE: 'server-whisper'
+  DEFAULT_STT_ENGINE: 'server-whisper',
+  
+  // Auto-session configuration
+  AUTO_SESSION_TIMEOUT_MINUTES: 15  // Default timeout in minutes, 0 = disabled
 };
