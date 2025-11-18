@@ -12,7 +12,7 @@
 </head>
 <body class="state-idle min-h-screen">
     <!-- Main Drawer Layout (Mobile/Tablet Settings) -->
-    <div class="drawer lg:drawer-open min-h-screen">
+    <div class="drawer min-h-screen">
         <input id="settings-drawer" type="checkbox" class="drawer-toggle" />
 
         <!-- Main Content -->
@@ -393,16 +393,5 @@ hey dazy</textarea>
     <!-- Main app (load after all dependencies) -->
     <script src="/static/js/app.js" type="module"></script>
 
-    <script>
-        // Auto-open drawer on desktop, keep closed on mobile
-        const drawer = document.getElementById('settings-drawer');
-        const updateDrawerState = () => {
-            if (window.innerWidth >= 1024) { // lg breakpoint
-                drawer.checked = true;
-            }
-        };
-        updateDrawerState();
-        window.addEventListener('resize', updateDrawerState);
-    </script>
 </body>
 </html>
