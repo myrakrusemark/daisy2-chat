@@ -314,6 +314,29 @@ hey dazy</textarea>
                         </div>
                     </div>
 
+                    <!-- Notification Refresh -->
+                    <div class="form-control">
+                        <label class="label">
+                            <span class="label-text font-semibold">Notification Refresh</span>
+                        </label>
+                        <div class="space-y-2">
+                            <div class="form-control">
+                                <label class="label py-1">
+                                    <span class="label-text text-xs">Refresh Interval</span>
+                                    <span class="label-text-alt text-xs" id="notification-refresh-display">5 minutes</span>
+                                </label>
+                                <input type="range" id="notification-refresh" min="0" max="60" value="5" step="1" class="range range-xs range-secondary" />
+                                <div class="w-full flex justify-between text-xs opacity-60" style="margin-top: 4px; padding: 0 4px;">
+                                    <span style="flex: 1 0 auto;">Once only</span>
+                                    <span style="flex: 0 0 auto;">60min</span>
+                                </div>
+                                <label class="label">
+                                    <span class="label-text-alt text-xs">How often to refresh workspace notifications. Set to 0 to only load once per session.</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="divider my-2"></div>
 
                     <!-- Session Management -->

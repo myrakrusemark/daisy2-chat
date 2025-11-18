@@ -8,6 +8,8 @@ class NotificationArea {
     this.notificationEl = null;
     this.isVisible = false;
     this.currentSessionId = null;
+    this.refreshInterval = 5; // minutes, 0 = disabled
+    this.refreshTimer = null; // timer ID for setInterval
     
     // Initialize notification area in DOM
     this.initializeNotificationArea();
@@ -289,6 +291,70 @@ class NotificationArea {
   async onNewSession(sessionId) {
     console.log(`New session created: ${sessionId}`);
     await this.displayNotificationForSession(sessionId);
+    
+    // Start refresh timer if enabled
+    if (this.refreshInterval > 0) {
+      this.startRefreshTimer();
+    }
+  }
+
+  /**
+   * Set the refresh interval for periodic notification updates
+   * @param {number} minutes - Refresh interval in minutes (0 = disabled)
+   */
+  setRefreshInterval(minutes) {
+    this.refreshInterval = minutes;
+    
+    // Stop existing timer
+    this.stopRefreshTimer();
+    
+    // Start new timer if enabled
+    if (this.refreshInterval > 0 && this.currentSessionId) {
+      this.startRefreshTimer();
+    }
+    
+    console.log(`Notification refresh interval set to ${minutes} minutes`);
+  }
+
+  /**
+   * Start the periodic refresh timer
+   */
+  startRefreshTimer() {
+    if (this.refreshInterval <= 0) {
+      console.log('Notification refresh timer disabled (interval = 0)');
+      return;
+    }
+    
+    // Stop any existing timer
+    this.stopRefreshTimer();
+    
+    const intervalMs = this.refreshInterval * 60 * 1000; // convert minutes to milliseconds
+    
+    this.refreshTimer = setInterval(() => {
+      console.log(`🔄 Periodic notification refresh (every ${this.refreshInterval} minutes)`);
+      this.refreshNotification();
+    }, intervalMs);
+    
+    console.log(`Notification refresh timer started (${this.refreshInterval} minutes)`);
+  }
+
+  /**
+   * Stop the periodic refresh timer
+   */
+  stopRefreshTimer() {
+    if (this.refreshTimer) {
+      clearInterval(this.refreshTimer);
+      this.refreshTimer = null;
+      console.log('Notification refresh timer stopped');
+    }
+  }
+
+  /**
+   * Get current refresh interval
+   * @returns {number} Current refresh interval in minutes
+   */
+  getRefreshInterval() {
+    return this.refreshInterval;
   }
 }
 

@@ -99,6 +99,9 @@ class ClaudeAssistant {
     
     // Load auto-session timeout setting
     this.loadAutoSessionTimeoutSetting();
+    
+    // Load notification refresh setting
+    this.loadNotificationRefreshSetting();
   }
 
   /**
@@ -242,6 +245,32 @@ hey dazy`;
     }
     
     console.log(`Auto-session timeout loaded: ${timeoutMinutes} minutes`);
+  }
+
+  /**
+   * Load notification refresh setting from localStorage
+   */
+  loadNotificationRefreshSetting() {
+    const savedRefresh = localStorage.getItem('notificationRefreshInterval');
+    const refreshMinutes = savedRefresh ? parseInt(savedRefresh) : 5; // Default to 5 minutes
+    
+    // Update UI elements
+    const refreshSlider = document.getElementById('notification-refresh');
+    const refreshDisplay = document.getElementById('notification-refresh-display');
+    
+    if (refreshSlider) {
+      refreshSlider.value = refreshMinutes;
+    }
+    if (refreshDisplay) {
+      refreshDisplay.textContent = refreshMinutes === 0 ? 'Once only' : `${refreshMinutes} minute${refreshMinutes === 1 ? '' : 's'}`;
+    }
+    
+    // Set the notification area refresh interval if it exists
+    if (this.notificationArea) {
+      this.notificationArea.setRefreshInterval(refreshMinutes);
+    }
+    
+    console.log(`Notification refresh interval loaded: ${refreshMinutes} minutes`);
   }
 
   /**
@@ -922,6 +951,15 @@ hey dazy`;
       const minutes = parseInt(autoSessionSlider.value);
       autoSessionDisplay.textContent = minutes === 0 ? 'Disabled' : `${minutes} minute${minutes === 1 ? '' : 's'}`;
       this.setAutoSessionTimeout(minutes);
+    });
+
+    // Notification refresh controls
+    const notificationRefreshSlider = document.getElementById('notification-refresh');
+    const notificationRefreshDisplay = document.getElementById('notification-refresh-display');
+    notificationRefreshSlider?.addEventListener('input', () => {
+      const minutes = parseInt(notificationRefreshSlider.value);
+      notificationRefreshDisplay.textContent = minutes === 0 ? 'Once only' : `${minutes} minute${minutes === 1 ? '' : 's'}`;
+      this.setNotificationRefreshInterval(minutes);
     });
   }
 
@@ -1770,6 +1808,21 @@ hey dazy`;
     this.resetAutoSessionTimer();
     
     console.log(`Auto-session timeout updated: ${minutes} minutes`);
+  }
+
+  /**
+   * Update notification refresh interval setting
+   */
+  setNotificationRefreshInterval(minutes) {
+    // Save to localStorage
+    localStorage.setItem('notificationRefreshInterval', minutes.toString());
+    
+    // Update notification area if it exists
+    if (this.notificationArea) {
+      this.notificationArea.setRefreshInterval(minutes);
+    }
+    
+    console.log(`Notification refresh interval updated: ${minutes} minutes`);
   }
 }
 
