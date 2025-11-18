@@ -177,22 +177,47 @@ body.state-listening #btn-push-to-talk {
     }
 }
 
-/* White pulse glow animation for VAD */
-@keyframes pulse-glow-white {
+/* Light blue pulse glow animation for VAD */
+@keyframes pulse-glow-light-blue {
     0%, 100% {
-        box-shadow: 0 0 15px rgba(255, 255, 255, 0.4);
+        box-shadow: 0 0 15px rgba(135, 206, 235, 0.6);
         opacity: 1;
     }
     50% {
-        box-shadow: 0 0 30px rgba(255, 255, 255, 0.8);
+        box-shadow: 0 0 30px rgba(135, 206, 235, 0.9);
         opacity: 0.95;
     }
 }
 
-/* VAD active state - white glow when speech is detected */
-#btn-push-to-talk.vad-active {
-    animation: pulse-glow-white 1.5s infinite;
-    border-color: rgba(255, 255, 255, 0.6);
+/* VAD active state - light blue when speech is detected, recording, or processing */
+#btn-push-to-talk.vad-active,
+body.state-processing #btn-push-to-talk,
+body.state-listening #btn-push-to-talk.vad-active {
+    background: linear-gradient(135deg,
+        rgba(135, 206, 235, 0.8) 0%,
+        rgba(70, 130, 180, 0.8) 100%);
+    animation: pulse-glow-light-blue 1.5s infinite;
+    border-color: rgba(135, 206, 235, 0.8);
+}
+
+/* Disabled button states for error/disconnected modes */
+body.state-error #btn-push-to-talk {
+    opacity: 0.6;
+    cursor: not-allowed;
+    background: linear-gradient(135deg,
+        rgba(100, 100, 100, 0.4) 0%,
+        rgba(80, 80, 80, 0.4) 100%);
+    border-color: rgba(255, 255, 255, 0.3);
+    box-shadow: none;
+    animation: none;
+}
+
+body.state-error #btn-push-to-talk:hover {
+    background: linear-gradient(135deg,
+        rgba(100, 100, 100, 0.4) 0%,
+        rgba(80, 80, 80, 0.4) 100%);
+    transform: none;
+    box-shadow: none;
 }
 
 /* Modal styling */
