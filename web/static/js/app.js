@@ -18,6 +18,16 @@ class ClaudeAssistant {
     this.audio = new window.AudioManager();
     this.ui = new window.UIComponents();
     this.healthMonitor = new window.HealthMonitor();
+    
+    // Initialize notification area with safety check
+    if (window.NotificationArea) {
+      this.notificationArea = new window.NotificationArea();
+    } else {
+      console.warn('NotificationArea not available - notifications disabled');
+      this.notificationArea = { 
+        onNewSession: () => console.log('Notifications disabled - NotificationArea not loaded')
+      };
+    }
     this.ws = null;
     this.sessionId = null;
     // VAD is now integrated into audio manager
@@ -416,7 +426,7 @@ hey dazy`;
 
     // Setup WebSocket callbacks
     this.ws.onConnect = () => {
-      console.log('Connected to WebSocket');
+      console.log('🔗 Connected to WebSocket');
       this.ui.setConnectionStatus('connected');
             
       // Reset client state to idle on successful connection
@@ -435,6 +445,21 @@ hey dazy`;
 
       // Check server transcription availability
       this.checkServerTranscriptionAvailability();
+      
+      // Display notification after connection is fully established
+      if (this.pendingNotificationSessionId) {
+        console.log('🔔 Displaying notification for session:', this.pendingNotificationSessionId);
+        this.notificationArea.onNewSession(this.pendingNotificationSessionId);
+        this.pendingNotificationSessionId = null;
+      } else {
+        console.log('⚠️ No pending notification session ID');
+      }
+      
+      // Also check if we have a current session ID and display notification
+      if (this.sessionId && this.notificationArea) {
+        console.log('🔔 Also displaying notification for current session:', this.sessionId);
+        this.notificationArea.onNewSession(this.sessionId);
+      }
             
       // Update STT engine status indicators
       this.updateSTTEngineStatus();
@@ -491,6 +516,10 @@ hey dazy`;
     this.ws.onSessionInfo = (info) => {
       console.log('Session info received:', info);
       this.ui.setSessionId(info.session_id);
+      
+      // Store session ID for notification display after connection completes
+      this.pendingNotificationSessionId = info.session_id;
+      console.log('Stored pending notification session ID:', this.pendingNotificationSessionId);
     };
 
     this.ws.onAssistantMessage = (content, toolCalls) => {
@@ -1744,9 +1773,19 @@ hey dazy`;
   }
 }
 
-// Initialize app when DOM is ready
+// Initialize app when DOM is ready and all scripts are loaded
 document.addEventListener('DOMContentLoaded', () => {
-  console.log('Initializing Claude Assistant...');
-  const app = new ClaudeAssistant();
-  window.app = app; // For debugging
+  // Small delay to ensure all scripts are loaded
+  setTimeout(() => {
+    console.log('Initializing Claude Assistant...');
+    console.log('Available components:', {
+      AudioManager: !!window.AudioManager,
+      UIComponents: !!window.UIComponents,
+      HealthMonitor: !!window.HealthMonitor,
+      NotificationArea: !!window.NotificationArea
+    });
+    
+    const app = new ClaudeAssistant();
+    window.app = app; // For debugging
+  }, 100);
 });

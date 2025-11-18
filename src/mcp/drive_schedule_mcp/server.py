@@ -32,72 +32,8 @@ logger = logging.getLogger(__name__)
 # Create server instance
 server = Server("drive-schedule")
 
-# Reference date for Friday alternation: September 12, 2025 (Myra drove)
-REFERENCE_DATE = datetime(2025, 9, 12)
-
-
-def calculate_driver(target_date: datetime) -> dict[str, Any]:
-    """
-    Calculate who drives on a given date.
-
-    Args:
-        target_date: The date to check
-
-    Returns:
-        Dictionary with driver information
-    """
-    day_name = target_date.strftime("%A")
-    date_str = target_date.strftime("%Y-%m-%d")
-
-    # Calculate Friday driver (alternates weekly)
-    days_diff = (target_date - REFERENCE_DATE).days
-    weeks_diff = days_diff // 7
-    friday_driver = "Myra" if weeks_diff % 2 == 0 else "Kristann"
-
-    # Determine driver based on day of week
-    schedule = {
-        "Monday": {
-            "driver": "Myra",
-            "passengers": ["Nova"],
-            "description": "Myra drives Nova"
-        },
-        "Tuesday": {
-            "driver": "Myra",
-            "passengers": ["Nova", "Anna"],
-            "description": "Myra drives Nova and Anna"
-        },
-        "Wednesday": {
-            "driver": "Myra",
-            "passengers": ["Nova"],
-            "description": "Myra drives Nova"
-        },
-        "Thursday": {
-            "driver": "Kristann",
-            "passengers": ["Nova", "Anna"],
-            "description": "Kristann drives Nova and Anna"
-        },
-        "Friday": {
-            "driver": friday_driver,
-            "passengers": ["Nova", "Anna"],
-            "description": f"{friday_driver} drives Nova and Anna (alternating week)"
-        },
-        "Saturday": {
-            "driver": None,
-            "passengers": [],
-            "description": "No school drive (weekend)"
-        },
-        "Sunday": {
-            "driver": None,
-            "passengers": [],
-            "description": "No school drive (weekend)"
-        }
-    }
-
-    result = schedule[day_name]
-    result["date"] = date_str
-    result["day"] = day_name
-
-    return result
+# Import the shared schedule logic
+from .schedule_logic import calculate_driver
 
 
 @server.list_tools()

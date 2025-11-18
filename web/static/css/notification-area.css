@@ -1,0 +1,176 @@
+/* Notification Area Styling */
+.notification-area {
+  margin-bottom: 1.5rem;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.notification-area.hidden {
+  display: none;
+}
+
+.notification-container {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 1.5rem;
+  max-width: 600px;
+  width: 100%;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Subtle gradient overlay */
+.notification-container::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, 
+    transparent, 
+    rgba(255, 255, 255, 0.2) 50%, 
+    transparent
+  );
+}
+
+.notification-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  position: relative;
+  background: none;
+  border: none;
+  padding: 0;
+  margin-bottom: 0.75rem;
+}
+
+.notification-content:last-child {
+  margin-bottom: 0;
+}
+
+.notification-text {
+  flex: 1;
+  line-height: 1.5;
+  word-wrap: break-word;
+}
+
+/* Custom alert styles for notification items */
+.notification-area .alert {
+  border-radius: 0.75rem;
+  padding: 1rem;
+  margin: 0 0 0.75rem 0;
+  border: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(5px);
+}
+
+.notification-area .alert:last-child {
+  margin-bottom: 0;
+}
+
+.notification-area .alert-info {
+  background: linear-gradient(135deg, 
+    hsl(var(--in) / 0.1) 0%, 
+    hsl(var(--in) / 0.05) 100%
+  );
+  color: hsl(var(--inc));
+  border: 1px solid hsl(var(--in) / 0.2);
+}
+
+.notification-area .alert-success {
+  background: linear-gradient(135deg, 
+    hsl(var(--su) / 0.1) 0%, 
+    hsl(var(--su) / 0.05) 100%
+  );
+  color: hsl(var(--suc));
+  border: 1px solid hsl(var(--su) / 0.2);
+}
+
+.notification-area .alert-warning {
+  background: linear-gradient(135deg, 
+    hsl(var(--wa) / 0.1) 0%, 
+    hsl(var(--wa) / 0.05) 100%
+  );
+  color: hsl(var(--wac));
+  border: 1px solid hsl(var(--wa) / 0.2);
+}
+
+.notification-area .alert-error {
+  background: linear-gradient(135deg, 
+    hsl(var(--er) / 0.1) 0%, 
+    hsl(var(--er) / 0.05) 100%
+  );
+  color: hsl(var(--erc));
+  border: 1px solid hsl(var(--er) / 0.2);
+}
+
+/* Dark theme adjustments */
+[data-theme="dark"] .notification-area .alert {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+[data-theme="dark"] .notification-area .alert-info {
+  background-color: hsl(var(--in) / 0.15);
+}
+
+[data-theme="dark"] .notification-area .alert-success {
+  background-color: hsl(var(--su) / 0.15);
+}
+
+[data-theme="dark"] .notification-area .alert-warning {
+  background-color: hsl(var(--wa) / 0.15);
+}
+
+[data-theme="dark"] .notification-area .alert-error {
+  background-color: hsl(var(--er) / 0.15);
+}
+
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+  .notification-container {
+    margin: 0 1rem;
+    max-width: calc(100% - 2rem);
+    padding: 1rem;
+  }
+  
+  .notification-content {
+    padding: 0.75rem;
+  }
+  
+  .notification-area .alert {
+    border-radius: 0.5rem;
+  }
+}
+
+/* Animation for showing/hiding */
+.notification-area {
+  transition: all 0.3s ease;
+  transform-origin: top;
+}
+
+.notification-area:not(.hidden) {
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Ensure proper spacing in conversation area */
+.notification-area + #conversation {
+  margin-top: 0;
+}

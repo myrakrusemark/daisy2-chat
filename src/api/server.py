@@ -21,6 +21,7 @@ from .models import (
     DownloadLinkRequest, DownloadLinkResponse
 )
 from .download_manager import DownloadTokenManager
+from .notification_manager import notification_manager
 from . import git_operations
 
 # Configure logging
@@ -335,6 +336,79 @@ async def initialize_git(data: dict):
         raise
     except Exception as e:
         log.error(f"Error initializing git repo: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/notifications/{session_id}")
+async def get_session_notifications(session_id: str):
+    """
+    Get notification content for a session's workspace
+    
+    Args:
+        session_id: Session ID to get notifications for
+        
+    Returns:
+        Notification content or None if no notifications configured
+    """
+    try:
+        # Get session from session manager
+        if session_id not in session_manager.sessions:
+            raise HTTPException(status_code=404, detail="Session not found")
+            
+        session = session_manager.sessions[session_id]
+        working_dir = str(session.config.working_directory)
+        
+        # Prepare session data for variable interpolation
+        session_data = {
+            "session_id": session_id,
+            "working_dir": working_dir,
+            "conversation_id": session.conversation.conversation_id,
+            "created_at": session.created_at.isoformat(),
+            "last_activity": session.last_activity.isoformat()
+        }
+        
+        # Get notification content
+        notification_content = await notification_manager.get_notification_content(
+            working_dir, session_data
+        )
+        
+        if notification_content:
+            return {
+                "success": True,
+                "notification": notification_content
+            }
+        else:
+            return {
+                "success": True,
+                "notification": None
+            }
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error(f"Error getting session notifications: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/notifications/cache")
+async def clear_notification_cache(working_dir: Optional[str] = None):
+    """
+    Clear notification cache
+    
+    Args:
+        working_dir: Optional specific workspace to clear, or all if not provided
+        
+    Returns:
+        Success status
+    """
+    try:
+        notification_manager.clear_cache(working_dir)
+        return {
+            "success": True,
+            "message": f"Cache cleared for {'all workspaces' if not working_dir else working_dir}"
+        }
+    except Exception as e:
+        log.error(f"Error clearing notification cache: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
