@@ -6,7 +6,7 @@
     <title>Claude Assistant</title>
     <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="/static/css/output.css">
-    <link rel="stylesheet" href="/static/css/state-themes.css">
+    <link rel="stylesheet" href="/static/css/state-themes-clean.css">
     <link rel="stylesheet" href="/static/css/health-monitor.css">
     <link rel="stylesheet" href="/static/css/notification-area.css">
 </head>
@@ -18,7 +18,7 @@
         <!-- Main Content -->
         <div class="drawer-content flex flex-col min-h-screen">
             <!-- Navbar/Header -->
-            <div class="navbar sticky top-0 z-10">
+            <div class="navbar sticky top-0 z-10 transparent-ui">
                 <div class="flex-none lg:hidden">
                     <label for="settings-drawer" class="btn btn-square btn-ghost">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="inline-block w-5 h-5 stroke-current">
@@ -46,28 +46,28 @@
             <!-- Conversation Area -->
             <div class="flex-1 flex flex-col overflow-hidden">
                 <div class="flex-1 overflow-y-scroll p-4 sm:p-6">
-                    <div id="conversation" class="mx-auto space-y-4 max-w-3xl">
+                    <div id="conversation" class="mx-auto space-y-4 max-w-3xl conversation-spaced">
                         <!-- Messages will be dynamically added here -->
                     </div>
                 </div>
 
                 <!-- Controls Bar (Fixed Bottom) -->
-                <div class="controls-area p-4 sm:p-6">
+                <div class="controls-area p-4 sm:p-6 controls-fixed transparent-ui">
                     <div class="mx-auto space-y-4 max-w-3xl">
                         <!-- Primary Action Buttons -->
                         <div class="flex justify-center items-center gap-6">
                             <!-- Keyboard Button (future feature) -->
-                            <button id="btn-keyboard" class="glass-button w-12 h-12 rounded-full" style="visibility: hidden;">
+                            <button id="btn-keyboard" class="glass-button w-12 h-12 rounded-full btn-hidden">
                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6 mx-auto">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25H12" />
                                 </svg>
                             </button>
 
                             <!-- Push to Talk Button -->
-                            <button id="btn-push-to-talk" class="w-20 h-20 rounded-full"></button>
+                            <button id="btn-push-to-talk" class="btn-primary-large"></button>
 
                             <!-- Stop Button -->
-                            <button id="btn-stop" class="glass-button w-12 h-12 rounded-full" style="visibility: hidden;">
+                            <button id="btn-stop" class="glass-button w-12 h-12 rounded-full btn-hidden">
                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6 mx-auto">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M5.25 7.5A2.25 2.25 0 017.5 5.25h9a2.25 2.25 0 012.25 2.25v9a2.25 2.25 0 01-2.25 2.25h-9a2.25 2.25 0 01-2.25-2.25v-9z" />
                                 </svg>
@@ -75,7 +75,7 @@
                         </div>
 
                         <!-- Status Display -->
-                        <div id="status-display" class="text-center text-sm text-base-content/70 min-h-[1.5rem]">
+                        <div id="status-display" class="status-text">
                             Ready to assist
                         </div>
                     </div>
@@ -86,7 +86,7 @@
         <!-- Settings Drawer (Sidebar) -->
         <div class="drawer-side z-60">
             <label for="settings-drawer" class="drawer-overlay"></label>
-            <div class="menu p-4 w-80 min-h-full text-base-content">
+            <div class="menu p-4 w-80 min-h-full text-base-content glass-sidebar">
                 <!-- Drawer Header -->
                 <div class="flex items-center gap-2 mb-6 px-2">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -99,7 +99,7 @@
                 <!-- Settings Form -->
                 <div class="space-y-6">
                     <!-- Working Directory -->
-                    <div class="form-control">
+                    <div class="form-control-spaced">
                         <label class="label">
                             <span class="label-text font-semibold">Working Directory</span>
                         </label>
@@ -116,7 +116,7 @@
                     </div>
 
                     <!-- Git Tracking Status -->
-                    <div class="form-control">
+                    <div class="form-control-spaced">
                         <label class="label">
                             <span class="label-text font-semibold">Git Tracking</span>
                         </label>
@@ -158,7 +158,7 @@
                     </div>
 
                     <!-- STT Engine Selection -->
-                    <div class="form-control">
+                    <div class="form-control-spaced">
                         <label class="label">
                             <span class="label-text font-semibold">Speech Recognition Engine</span>
                         </label>
@@ -182,7 +182,7 @@
                                 </div>
                             </label>
                             <!-- Hidden Android App STT option -->
-                            <label class="label cursor-pointer justify-start gap-3" style="display: none;">
+                            <label class="label cursor-pointer justify-start gap-3 android-option-hidden">
                                 <input type="radio" name="stt-engine" value="android-app" id="stt-android-app" class="radio radio-sm" />
                                 <div class="flex-1">
                                     <span class="label-text">Android App</span>
@@ -217,7 +217,7 @@
                         </div>
 
                         <!-- Keyword Variations -->
-                        <div class="form-control">
+                        <div class="form-control-spaced">
                             <label class="label py-1">
                                 <span class="label-text text-xs">Keywords & Variations</span>
                             </label>
@@ -231,41 +231,41 @@ hey dazy</textarea>
                         </div>
 
                         <!-- VAD Sensitivity -->
-                        <div class="form-control">
+                        <div class="form-control-spaced">
                             <label class="label py-1">
                                 <span class="label-text text-xs">VAD Sensitivity</span>
                                 <span class="label-text-alt text-xs" id="vad-sensitivity-display">0.50</span>
                             </label>
-                            <input type="range" id="vad-sensitivity" min="0.2" max="0.8" value="0.5" step="0.05" class="range range-xs range-primary" />
-                            <div class="w-full flex justify-between text-xs opacity-60" style="margin-top: 4px; padding: 0 4px;">
-                                <span style="flex: 1 0 auto;">High</span>
-                                <span style="flex: 0 0 auto;">Low</span>
+                            <input type="range" id="vad-sensitivity" min="0.2" max="0.8" value="0.5" step="0.05" class="range-styled" />
+                            <div class="range-labels">
+                                <span class="range-label-start">High</span>
+                                <span class="range-label-end">Low</span>
                             </div>
                         </div>
 
                         <!-- Recording Timeout -->
-                        <div class="form-control">
+                        <div class="form-control-spaced">
                             <label class="label py-1">
                                 <span class="label-text text-xs">Recording Timeout</span>
                                 <span class="label-text-alt text-xs" id="recording-timeout-display">2.0s</span>
                             </label>
-                            <input type="range" id="recording-timeout" min="1.0" max="5.0" value="2.0" step="0.5" class="range range-xs range-primary" />
-                            <div class="w-full flex justify-between text-xs opacity-60" style="margin-top: 4px; padding: 0 4px;">
-                                <span style="flex: 1 0 auto;">1s</span>
-                                <span style="flex: 0 0 auto;">5s</span>
+                            <input type="range" id="recording-timeout" min="1.0" max="5.0" value="2.0" step="0.5" class="range-styled" />
+                            <div class="range-labels">
+                                <span class="range-label-start">1s</span>
+                                <span class="range-label-end">5s</span>
                             </div>
                         </div>
 
                         <!-- Pre-Buffer Duration -->
-                        <div class="form-control">
+                        <div class="form-control-spaced">
                             <label class="label py-1">
                                 <span class="label-text text-xs">Pre-Buffer Duration</span>
                                 <span class="label-text-alt text-xs" id="buffer-duration-display">750ms</span>
                             </label>
-                            <input type="range" id="buffer-duration" min="250" max="1500" value="750" step="250" class="range range-xs range-secondary" />
-                            <div class="w-full flex justify-between text-xs opacity-60" style="margin-top: 4px; padding: 0 4px;">
-                                <span style="flex: 1 0 auto;">250ms</span>
-                                <span style="flex: 0 0 auto;">1500ms</span>
+                            <input type="range" id="buffer-duration" min="250" max="1500" value="750" step="250" class="range-styled" />
+                            <div class="range-labels">
+                                <span class="range-label-start">250ms</span>
+                                <span class="range-label-end">1500ms</span>
                             </div>
                             <label class="label">
                                 <span class="label-text-alt text-xs">Audio captured before speech detection (server mode only). Browser Speech API may miss first syllables.</span>
@@ -274,14 +274,14 @@ hey dazy</textarea>
 
                         <!-- Apply Settings -->
                         <div class="flex gap-1 pt-2">
-                            <button id="btn-apply-keyword-settings" class="btn btn-primary btn-xs flex-1" style="font-size: 11px; padding: 4px 8px; height: 24px;">
-                                <svg xmlns="http://www.w3.org/2000/svg" style="width: 10px; height: 10px;" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <button id="btn-apply-keyword-settings" class="btn btn-primary btn-xs flex-1 btn-compact">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="icon-compact" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
                                 </svg>
                                 Apply
                             </button>
-                            <button id="btn-reset-keyword-settings" class="btn btn-ghost btn-xs" style="font-size: 11px; padding: 4px 8px; height: 24px;">
-                                <svg xmlns="http://www.w3.org/2000/svg" style="width: 10px; height: 10px;" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <button id="btn-reset-keyword-settings" class="btn btn-ghost btn-xs btn-compact">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="icon-compact" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                                 </svg>
                                 Reset
@@ -292,20 +292,20 @@ hey dazy</textarea>
                     <div class="divider my-2"></div>
 
                     <!-- Auto-Session Timeout -->
-                    <div class="form-control">
+                    <div class="form-control-spaced">
                         <label class="label">
                             <span class="label-text font-semibold">Auto-Session Timeout</span>
                         </label>
                         <div class="space-y-2">
-                            <div class="form-control">
+                            <div class="form-control-spaced">
                                 <label class="label py-1">
                                     <span class="label-text text-xs">Timeout Duration</span>
                                     <span class="label-text-alt text-xs" id="auto-session-timeout-display">15 minutes</span>
                                 </label>
-                                <input type="range" id="auto-session-timeout" min="0" max="60" value="15" step="1" class="range range-xs range-primary" />
-                                <div class="w-full flex justify-between text-xs opacity-60" style="margin-top: 4px; padding: 0 4px;">
-                                    <span style="flex: 1 0 auto;">Disabled</span>
-                                    <span style="flex: 0 0 auto;">60min</span>
+                                <input type="range" id="auto-session-timeout" min="0" max="60" value="15" step="1" class="range-styled" />
+                                <div class="range-labels">
+                                    <span class="range-label-start">Disabled</span>
+                                    <span class="range-label-end">60min</span>
                                 </div>
                                 <label class="label">
                                     <span class="label-text-alt text-xs">Automatically creates a new session after inactivity. Only starts after you speak once. Set to 0 to disable.</span>
@@ -315,20 +315,20 @@ hey dazy</textarea>
                     </div>
 
                     <!-- Notification Refresh -->
-                    <div class="form-control">
+                    <div class="form-control-spaced">
                         <label class="label">
                             <span class="label-text font-semibold">Notification Refresh</span>
                         </label>
                         <div class="space-y-2">
-                            <div class="form-control">
+                            <div class="form-control-spaced">
                                 <label class="label py-1">
                                     <span class="label-text text-xs">Refresh Interval</span>
                                     <span class="label-text-alt text-xs" id="notification-refresh-display">5 minutes</span>
                                 </label>
-                                <input type="range" id="notification-refresh" min="0" max="60" value="5" step="1" class="range range-xs range-secondary" />
-                                <div class="w-full flex justify-between text-xs opacity-60" style="margin-top: 4px; padding: 0 4px;">
-                                    <span style="flex: 1 0 auto;">Once only</span>
-                                    <span style="flex: 0 0 auto;">60min</span>
+                                <input type="range" id="notification-refresh" min="0" max="60" value="5" step="1" class="range-styled" />
+                                <div class="range-labels">
+                                    <span class="range-label-start">Once only</span>
+                                    <span class="range-label-end">60min</span>
                                 </div>
                                 <label class="label">
                                     <span class="label-text-alt text-xs">How often to refresh workspace notifications. Set to 0 to only load once per session.</span>

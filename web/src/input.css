@@ -1,0 +1,108 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom Component Classes */
+@layer components {
+  /* Glass morphism button */
+  .glass-button {
+    @apply bg-white bg-opacity-10 backdrop-blur-md border border-white border-opacity-20 hover:bg-opacity-20 transition-all duration-200;
+  }
+  
+  /* Primary action button with proper focus states */
+  .btn-primary-large {
+    @apply w-20 h-20 rounded-full bg-primary hover:bg-primary-content transform active:scale-95 transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-primary focus:ring-opacity-30;
+  }
+  
+  /* Status display with proper typography */
+  .status-text {
+    @apply text-center text-sm font-medium opacity-70;
+    min-height: 1.5rem;
+  }
+  
+  /* Notification container with proper spacing */
+  .notification-container {
+    @apply bg-base-200 bg-opacity-80 backdrop-blur-sm rounded-2xl border border-base-300 p-6 max-w-xl w-full shadow-lg;
+  }
+  
+  /* Settings form sections */
+  .settings-section {
+    @apply space-y-4 p-4 rounded-lg bg-base-200 bg-opacity-30;
+  }
+  
+  /* Range slider with proper styling */
+  .range-styled {
+    @apply range range-sm range-primary;
+  }
+  
+  /* Form controls with consistent spacing */
+  .form-control-spaced {
+    @apply flex flex-col space-y-2;
+  }
+  
+  /* Hidden control buttons */
+  .btn-hidden {
+    visibility: hidden;
+  }
+  
+  /* Hidden Android option */
+  .android-option-hidden {
+    display: none;
+  }
+  
+  /* Range slider labels */
+  .range-labels {
+    @apply w-full flex justify-between text-xs opacity-60;
+    margin-top: 4px;
+    padding: 0 4px;
+  }
+  
+  .range-label-start {
+    flex: 1 0 auto;
+  }
+  
+  .range-label-end {
+    flex: 0 0 auto;
+  }
+  
+  /* Compact settings buttons */
+  .btn-compact {
+    font-size: 11px;
+    padding: 4px 8px;
+    height: 24px;
+  }
+  
+  .icon-compact {
+    width: 10px;
+    height: 10px;
+  }
+  
+  /* Fixed layout components */
+  .controls-fixed {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 50;
+  }
+  
+  /* Transparent navbar and controls */
+  .transparent-ui {
+    background: transparent;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    border: none;
+  }
+  
+  /* Glass sidebar menu */
+  .glass-sidebar {
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+  }
+  
+  /* Conversation spacing for fixed controls */
+  .conversation-spaced {
+    padding-bottom: 180px;
+  }
+}
