@@ -458,6 +458,125 @@ class UIComponents {
     // The createNewSession() method will update status to "Creating new session..."
     // so this provides a brief intermediate notification
   }
+
+  /**
+   * Update tool input progress display
+   */
+  updateToolInputProgress(toolId, currentInput) {
+    // Find the most recent tool indicator that matches this tool ID
+    const toolIndicators = document.querySelectorAll('.glass-tool-display');
+    const lastIndicator = toolIndicators[toolIndicators.length - 1];
+    
+    if (lastIndicator) {
+      // Add or update progress display
+      let progressEl = lastIndicator.querySelector('.tool-input-progress');
+      if (!progressEl) {
+        progressEl = document.createElement('div');
+        progressEl.className = 'tool-input-progress text-xs mt-2 opacity-60 font-mono';
+        lastIndicator.appendChild(progressEl);
+      }
+      
+      // Show meaningful progress based on input type
+      const progressText = this.formatToolProgress(currentInput);
+      progressEl.textContent = progressText;
+      
+      // Scroll to keep progress visible
+      this.scrollToBottom();
+    }
+  }
+
+  /**
+   * Format tool progress for display
+   */
+  formatToolProgress(input) {
+    if (!input || typeof input !== 'object') return '';
+    
+    // Extract meaningful progress information
+    const keys = Object.keys(input);
+    if (keys.length === 0) return 'Preparing...';
+    
+    // Common patterns for different tools
+    if (input.query) return `Searching for: "${input.query}"`;
+    if (input.path) return `Working with: ${input.path}`;
+    if (input.content) return `Processing content...`;
+    if (input.url) return `Fetching: ${input.url}`;
+    if (input.command) return `Running: ${input.command}`;
+    
+    // Fallback: show first key-value pair
+    const firstKey = keys[0];
+    const value = input[firstKey];
+    if (typeof value === 'string' && value.length < 50) {
+      return `${firstKey}: ${value}`;
+    }
+    
+    return `Building ${firstKey}...`;
+  }
+
+  /**
+   * Add thinking content (Claude's reasoning)
+   */
+  addThinkingContent(content) {
+    // Find or create thinking container
+    let thinkingContainer = document.querySelector('.thinking-container');
+    if (!thinkingContainer) {
+      thinkingContainer = this.createThinkingContainer();
+      this.appendMessage(thinkingContainer);
+    }
+    
+    // Append new thinking content
+    const thinkingBody = thinkingContainer.querySelector('.thinking-body');
+    const contentEl = document.createElement('span');
+    contentEl.textContent = content;
+    thinkingBody.appendChild(contentEl);
+    
+    // Scroll to bottom
+    this.scrollToBottom();
+  }
+
+  /**
+   * Create collapsible thinking container
+   */
+  createThinkingContainer() {
+    const container = document.createElement('div');
+    container.className = 'thinking-container flex justify-start mb-2';
+    
+    container.innerHTML = `
+      <div class="max-w-[80%]">
+        <div class="glass-thinking-display">
+          <div class="thinking-header px-4 py-2 cursor-pointer flex items-center justify-between">
+            <div class="text-xs font-semibold text-blue-400 flex items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+              </svg>
+              <span>Claude's Reasoning</span>
+            </div>
+            <svg class="thinking-toggle h-4 w-4 transform transition-transform duration-200" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+            </svg>
+          </div>
+          <div class="thinking-body px-4 pb-4 text-xs font-mono opacity-70 hidden whitespace-pre-wrap"></div>
+        </div>
+      </div>
+    `;
+    
+    // Add click handler for toggle
+    const header = container.querySelector('.thinking-header');
+    const body = container.querySelector('.thinking-body');
+    const toggle = container.querySelector('.thinking-toggle');
+    
+    header.addEventListener('click', () => {
+      const isHidden = body.classList.contains('hidden');
+      body.classList.toggle('hidden');
+      toggle.classList.toggle('rotate-180');
+      
+      if (!isHidden) {
+        // Scroll to keep header visible when collapsing
+        header.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    });
+    
+    return container;
+  }
 }
 
 // Export for use in other modules

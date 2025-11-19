@@ -343,6 +343,8 @@ Reply with ONLY the specific summary sentence starting with a verb ending in -in
         on_tool_use: Optional[Callable[[str, dict, str], None]] = None,
         on_tool_summary_update: Optional[Callable[[str, dict, str], None]] = None,
         on_text_block: Optional[Callable[[str], None]] = None,
+        on_tool_input_progress: Optional[Callable[[str, str, dict], None]] = None,
+        on_thinking_block: Optional[Callable[[str], None]] = None,
         conversation_history: Optional[List[Dict[str, Any]]] = None,
         is_interrupted: Optional[Callable[[], bool]] = None
     ) -> Dict[str, Any]:
@@ -354,6 +356,8 @@ Reply with ONLY the specific summary sentence starting with a verb ending in -in
             on_tool_use: Callback when a tool is used (tool_name, tool_input, summary)
             on_tool_summary_update: Callback when better summary is ready (delayed)
             on_text_block: Callback when a text content block is received (text)
+            on_tool_input_progress: Callback for incremental tool input construction (tool_id, partial_json, current_input)
+            on_thinking_block: Callback when Claude reasoning content is received (thinking_text)
             conversation_history: Optional conversation history for context
             is_interrupted: Callable that returns True if execution should stop
 
@@ -555,6 +559,50 @@ Reply with ONLY the specific summary sentence starting with a verb ending in -in
                                     asyncio.create_task(
                                         self._summarize_and_update(tool_name, tool_input, on_tool_summary_update)
                                     )
+
+                    # Handle content block delta events (tool input progress and thinking)
+                    elif event_type == "content_block_delta":
+                        delta = event.get("delta", {})
+                        delta_type = delta.get("type")
+                        
+                        if delta_type == "input_json_delta":
+                            # Tool input construction progress
+                            partial_json = delta.get("partial_json", "")
+                            tool_id = event.get("index", "unknown")  # content block index
+                            
+                            if partial_json and on_tool_input_progress:
+                                # Check if interrupted before sending progress
+                                if is_interrupted and is_interrupted():
+                                    log.info("Interrupted before tool input progress")
+                                    return {
+                                        "success": False,
+                                        "response": "Request interrupted by user",
+                                        "tool_calls": tool_calls,
+                                    }
+                                
+                                # Try to parse current input state
+                                try:
+                                    current_input = json.loads(partial_json + "}")  # Attempt to close JSON
+                                except json.JSONDecodeError:
+                                    current_input = {}  # Fallback for incomplete JSON
+                                
+                                await on_tool_input_progress(str(tool_id), partial_json, current_input)
+                        
+                        elif delta_type == "thinking_delta":
+                            # Claude reasoning content
+                            thinking_text = delta.get("text", "")
+                            
+                            if thinking_text and on_thinking_block:
+                                # Check if interrupted before sending thinking block
+                                if is_interrupted and is_interrupted():
+                                    log.info("Interrupted before thinking block")
+                                    return {
+                                        "success": False,
+                                        "response": "Request interrupted by user",
+                                        "tool_calls": tool_calls,
+                                    }
+                                
+                                await on_thinking_block(thinking_text)
 
                     # Check for final result event
                     elif event_type == "result":
