@@ -52,8 +52,9 @@ data/conversations/*.yaml
 # Workspace git directory
 workspace/.git
 
-# MCP driving schedule script
+# Personal MCP servers
 src/mcp/drive_schedule_mcp/
+src/mcp/trading_agent/
 
 # Logs
 *.log
