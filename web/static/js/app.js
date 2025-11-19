@@ -596,6 +596,22 @@ hey dazy`;
       // TTS is handled by server via stream_tts_audio
     };
 
+    // Handle tool input progress (incremental tool construction)
+    this.ws.onToolInputProgress = (toolId, partialJson, currentInput) => {
+      console.log('Tool input progress:', toolId, currentInput);
+      
+      // Update UI to show tool input being constructed
+      this.ui.updateToolInputProgress(toolId, currentInput);
+    };
+
+    // Handle thinking blocks (Claude's reasoning process)
+    this.ws.onThinkingBlock = (content) => {
+      console.log('Thinking block:', content);
+      
+      // Add to thinking display (collapsible by default)
+      this.ui.addThinkingContent(content);
+    };
+
     // Handle mark_final message (indicates the last text block was final)
     this.ws.onMarkFinal = () => {
       console.log('Current response marked as final');

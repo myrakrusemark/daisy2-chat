@@ -173,6 +173,20 @@ class WebSocketClient {
       }
       break;
 
+    case 'tool_input_progress':
+      console.log('Tool input progress:', message.tool_id, message.current_input);
+      if (this.onToolInputProgress) {
+        this.onToolInputProgress(message.tool_id, message.partial_json, message.current_input);
+      }
+      break;
+
+    case 'thinking_block':
+      console.log('Thinking block:', message.content);
+      if (this.onThinkingBlock) {
+        this.onThinkingBlock(message.content);
+      }
+      break;
+
     case 'mark_final':
       console.log('Marking current response as final');
       if (this.onMarkFinal) {

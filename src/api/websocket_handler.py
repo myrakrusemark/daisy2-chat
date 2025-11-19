@@ -217,12 +217,44 @@ class WebSocketHandler:
                 # Stream TTS audio for the text block
                 await self.stream_tts_audio(text)
 
+            # Define callback for tool input progress
+            async def on_tool_input_progress(tool_id: str, partial_json: str, current_input: dict):
+                """Callback when tool input is being constructed incrementally"""
+                log.info(f"on_tool_input_progress callback called: tool_id={tool_id} (interrupted={self.interrupted})")
+                if self.interrupted:
+                    log.info(f"Skipping tool input progress (interrupted): {tool_id}")
+                    return
+
+                # Send tool input progress to browser
+                await self.send_message({
+                    "type": "tool_input_progress",
+                    "tool_id": tool_id,
+                    "partial_json": partial_json,
+                    "current_input": current_input
+                })
+
+            # Define callback for thinking blocks  
+            async def on_thinking_block(thinking_text: str):
+                """Callback when Claude reasoning content is received"""
+                log.info(f"on_thinking_block callback called (interrupted={self.interrupted}): {thinking_text[:50]}...")
+                if self.interrupted:
+                    log.info("Skipping thinking block (interrupted)")
+                    return
+
+                # Send thinking block to browser
+                await self.send_message({
+                    "type": "thinking_block",
+                    "content": thinking_text
+                })
+
             # Execute Claude Code request with streaming
             result = await self.session.claude_client.execute_streaming(
                 prompt=content,
                 on_tool_use=on_tool_use,
                 on_tool_summary_update=on_tool_summary_update,
                 on_text_block=on_text_block,
+                on_tool_input_progress=on_tool_input_progress,
+                on_thinking_block=on_thinking_block,
                 conversation_history=self.session.conversation.history,
                 is_interrupted=lambda: self.interrupted,
             )
