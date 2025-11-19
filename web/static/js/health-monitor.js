@@ -32,12 +32,11 @@ class HealthMonitor {
       healthToggle.id = 'btn-health-toggle';
       healthToggle.className = 'btn btn-ghost btn-circle btn-sm';
       healthToggle.innerHTML = `
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L7 12.5l2.091 2.091a2.25 2.25 0 01.659 1.591v5.714a2.25 2.25 0 01-2.25 2.25h-2.091a2.25 2.25 0 01-2.25-2.25v-5.714A2.25 2.25 0 013.5 15.091L5.591 13 3.5 10.909A2.25 2.25 0 013.159 9.318V3.604A2.25 2.25 0 015.409 1.354h2.091A2.25 2.25 0 019.75 3.604z" />
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-5 h-5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                 </svg>
             `;
       healthToggle.title = 'System Health';
-      healthToggle.setAttribute('data-tooltip', 'System Health Dashboard');
             
       // Insert before the connection status indicator
       const connectionStatus = document.getElementById('connection-status');

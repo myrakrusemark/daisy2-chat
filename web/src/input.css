@@ -32,7 +32,7 @@
   
   /* Range slider with proper styling */
   .range-styled {
-    @apply range range-sm range-primary;
+    @apply range range-sm range-primary w-full;
   }
   
   /* Form controls with consistent spacing */
