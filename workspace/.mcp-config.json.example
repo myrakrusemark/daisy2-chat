@@ -1,0 +1,35 @@
+{
+  "mcpServers": {
+    "file-downloads": {
+      "command": "python3",
+      "args": [
+        "./src/mcp/file_downloads/mcp_server_standalone.py"
+      ],
+      "env": {
+        "DOWNLOAD_API_URL": "http://localhost:8000",
+        "SESSION_ID": "${SESSION_ID}",
+        "WORKING_DIRECTORY": "${WORKING_DIRECTORY}"
+      }
+    },
+    "weather": {
+      "command": "uv",
+      "args": [
+        "run",
+        "./src/mcp/weather_mcp/server.py"
+      ],
+      "env": {
+        "WEATHER_API_KEY": "${WEATHER_API_KEY}"
+      }
+    },
+    "custom-example": {
+      "command": "node",
+      "args": [
+        "./path/to/your/custom-mcp-server.js"
+      ],
+      "env": {
+        "CUSTOM_API_KEY": "${CUSTOM_API_KEY}",
+        "CUSTOM_CONFIG": "production"
+      }
+    }
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "mcpServers": {
+    "home-assistant": {
+      "command": "mcp-proxy",
+      "env": {
+        "SSE_URL": "http://homeassistant:8123/mcp_server/sse",
+        "API_ACCESS_TOKEN": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJmZWFjOTZmNTNmNjA0NWYyODZjMDdhYmQyNTEwMzMxNyIsImlhdCI6MTc2MDk5NjgxNSwiZXhwIjoyMDc2MzU2ODE1fQ.VCq58WNHkbBrHrXQkK7mvC-qMhm8VJLbVqfKaDsxdjg"
+      }
+    },
+    "trading-agent": {
+      "command": "bash",
+      "args": [
+        "-c",
+        "uv run $MCP_BASE_PATH/src/mcp/trading_agent/server.py"
+      ],
+      "env": {
+        "TRADING_AGENT_URL": "http://trade.myrakrusemark.com"
+      }
+    },
+    "file-downloads": {
+      "command": "bash",
+      "args": [
+        "-c",
+        "cd $MCP_BASE_PATH/src/mcp/file_downloads && uv run --project $MCP_BASE_PATH -- python3 mcp_server_standalone.py"
+      ],
+      "env": {
+        "DOWNLOAD_API_URL": "http://localhost:8000",
+        "BASE_URL": "http://localhost:8000"
+      }
+    },
+    "weather": {
+      "command": "bash",
+      "args": [
+        "-c",
+        "cd $MCP_BASE_PATH/src/mcp/weather_mcp && uv run --project $MCP_BASE_PATH -- python3 server.py"
+      ]
+    },
+    "drive-schedule": {
+      "command": "bash",
+      "args": [
+        "-c",
+        "cd $MCP_BASE_PATH/src/mcp/drive_schedule_mcp && uv run --project $MCP_BASE_PATH -- python3 server.py"
+      ]
+    }
+  }
+}

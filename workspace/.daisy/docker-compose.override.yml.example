@@ -1,0 +1,58 @@
+# Example Docker Compose Override for Workspace-Specific Configurations
+# Copy this file to docker-compose.override.yml and customize for your workspace
+
+version: '3.8'
+
+services:
+  claude-assistant:
+    # Add custom volume mounts for your workspace
+    volumes:
+      # Mount your personal data directories
+      - /path/to/your/documents:/workspace/data/documents:ro
+      - /path/to/your/projects:/workspace/projects:rw
+      
+      # Mount external storage or network drives
+      # - /mnt/nas/backup:/workspace/backup:ro
+      # - /media/usb/photos:/workspace/photos:ro
+      
+      # Mount configuration directories
+      # - ~/.ssh:/workspace/.ssh:ro
+      # - ~/.aws:/workspace/.aws:ro
+    
+    # Add custom environment variables
+    environment:
+      # Workspace-specific settings
+      - CUSTOM_WORKSPACE_NAME=MyWorkspace
+      - ENABLE_CUSTOM_FEATURES=true
+      
+      # Override default paths if needed
+      # - DEFAULT_WORKSPACE=/workspace/projects
+    
+    # Add additional port mappings if needed
+    # ports:
+    #   - "8001:8001"  # Additional service port
+    
+    # Add custom networks if needed
+    # networks:
+    #   - custom-network
+
+# Define custom networks if needed
+# networks:
+#   custom-network:
+#     external: true
+
+# Add additional services if needed
+# services:
+#   custom-database:
+#     image: postgres:13
+#     environment:
+#       POSTGRES_DB: myworkspace
+#       POSTGRES_USER: user
+#       POSTGRES_PASSWORD: password
+#     volumes:
+#       - postgres_data:/var/lib/postgresql/data
+#     networks:
+#       - custom-network
+
+# volumes:
+#   postgres_data:

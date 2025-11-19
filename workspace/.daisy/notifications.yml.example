@@ -1,0 +1,51 @@
+# Example .daisy/notifications.yml
+# Copy this file to notifications.yml and customize for your workspace
+
+# Single notification example
+notifications:
+  - id: "welcome"
+    enabled: true
+    title: "Welcome to Claude Assistant"
+    content_type: "static"
+    content:
+      text: "Welcome back! Ready to code with Claude. Current time: ${time}"
+    style: "info"
+    cache_ttl: 60
+
+  # Script-based notification example
+  - id: "git-status"
+    enabled: true
+    title: "Repository Status"
+    content_type: "script"
+    content:
+      script: "git status --porcelain | wc -l | awk '{print $1 \" files modified\"}'"
+    style: "warning"
+    cache_ttl: 300
+
+  # MCP-based notification example
+  - id: "weather-update"
+    enabled: false
+    title: "Weather Update"
+    content_type: "mcp"
+    content:
+      server: "weather"
+      method: "get_current_weather"
+      params:
+        location: "San Francisco, CA"
+    style: "info"
+    cache_ttl: 1800
+
+  # Agent-processed notification example
+  - id: "todo-summary"
+    enabled: false
+    title: "Daily Summary"
+    content_type: "agent_processed"
+    content:
+      script: "cat todo.md | head -10"
+      agent_prompt: "Summarize the top TODO items in a friendly, encouraging way"
+    style: "success"
+    cache_ttl: 3600
+
+# Style options: info, success, warning, error
+# Cache TTL is in seconds (0 = no cache)
+# Variables available in static content: ${sessionId}, ${workingDir}, ${timestamp}, ${date}, ${time}
