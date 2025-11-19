@@ -114,5 +114,6 @@ src/mcp/*/
 workspace/**/.git*
 workspace/mcp.config
 workspace/.mcp.json
+workspace/claude.md
 workspace/.daisy/notifications.yml
 workspace/.daisy/docker-compose.override.yml
