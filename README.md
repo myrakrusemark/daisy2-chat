@@ -1,4 +1,4 @@
-# Claude Assistant
+# Daisy2 Assistant
 
 A sophisticated voice-powered assistant that integrates Claude Code API with real-time speech recognition and text-to-speech capabilities. Features a FastAPI backend with WebSocket connections, browser-native speech recognition, and multiple STT/TTS engines for flexibility.
 
