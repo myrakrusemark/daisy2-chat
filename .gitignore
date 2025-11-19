@@ -101,3 +101,16 @@ new-fronend/
 *.tmp
 .temp/
 tmp/
+
+# Personal MCP servers (keep only public examples)
+src/mcp/*/
+!src/mcp/base.py
+!src/mcp/__init__.py
+!src/mcp/file_downloads/
+!src/mcp/weather_mcp/
+
+# Personal workspace configurations
+workspace/**/.git*
+workspace/mcp.config
+workspace/.daisy/notifications.yml
+workspace/.daisy/docker-compose.override.yml

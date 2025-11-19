@@ -3,7 +3,7 @@
     "file-downloads": {
       "command": "python3",
       "args": [
-        "/home/myra/cassistant/src/mcp/file_downloads/mcp_server_standalone.py"
+        "./src/mcp/file_downloads/mcp_server_standalone.py"
       ],
       "env": {
         "DOWNLOAD_API_URL": "http://localhost:8000",
