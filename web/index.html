@@ -97,264 +97,313 @@
                     <h2 class="text-xl font-bold">Settings</h2>
                 </div>
 
-                <!-- Settings Form -->
-                <div class="space-y-6">
-                    <!-- Working Directory -->
-                    <div class="form-control-spaced">
-                        <label class="label">
-                            <span class="label-text font-semibold">Working Directory</span>
-                        </label>
-                        <input
-                            type="text"
-                            id="working-directory"
-                            placeholder="/app/workspace"
-                            value="/app/workspace"
-                            class="input input-bordered input-sm w-full"
-                        />
-                        <label class="label">
-                            <span class="label-text-alt">Path where Claude will operate</span>
-                        </label>
-                    </div>
-
-                    <!-- Git Tracking Status -->
-                    <div class="form-control-spaced">
-                        <label class="label">
-                            <span class="label-text font-semibold">Git Tracking</span>
-                        </label>
-                        <div id="git-status-container" class="px-1">
-                            <div id="git-status-loading" class="flex items-center gap-2 text-sm text-base-content/50">
-                                <span class="loading loading-spinner loading-xs"></span>
-                                <span>Checking git status...</span>
-                            </div>
-                            <div id="git-status-initialized" class="hidden items-center gap-2 text-sm text-success">
+                <!-- Settings Form with Accordion Organization -->
+                <div class="space-y-3">
+                    
+                    <!-- Workspace Section -->
+                    <div class="collapse collapse-arrow bg-base-200 border border-base-300">
+                        <input type="checkbox" checked />
+                        <div class="collapse-title text-sm font-semibold">
+                            <div class="flex items-center gap-2">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 1v6m8-6v6" />
                                 </svg>
-                                <span>Git initialized - changes will be tracked</span>
+                                Workspace
                             </div>
-                            <div id="git-status-not-initialized" class="hidden flex-col gap-2">
-                                <div class="flex items-center gap-2 text-sm text-warning">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                                    </svg>
-                                    <span>Not a git repository - changes won't be tracked</span>
+                        </div>
+                        <div class="collapse-content">
+                            <div class="space-y-4 pt-2">
+                                <!-- Working Directory -->
+                                <div class="form-control-spaced">
+                                    <label class="label">
+                                        <span class="label-text font-semibold">Working Directory</span>
+                                    </label>
+                                    <input
+                                        type="text"
+                                        id="working-directory"
+                                        placeholder="/app/workspace"
+                                        value="/app/workspace"
+                                        class="input input-bordered input-sm w-full"
+                                    />
+                                    <label class="label">
+                                        <span class="label-text-alt">Path where Claude will operate</span>
+                                    </label>
                                 </div>
-                                <button id="btn-init-git" class="btn btn-sm btn-outline btn-warning w-full">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-                                    </svg>
-                                    Initialize Git Repository
-                                </button>
+
+                                <!-- Git Tracking Status -->
+                                <div class="form-control-spaced">
+                                    <label class="label">
+                                        <span class="label-text font-semibold">Git Tracking</span>
+                                    </label>
+                                    <div id="git-status-container" class="px-1">
+                                        <div id="git-status-loading" class="flex items-center gap-2 text-sm text-base-content/50">
+                                            <span class="loading loading-spinner loading-xs"></span>
+                                            <span>Checking git status...</span>
+                                        </div>
+                                        <div id="git-status-initialized" class="hidden items-center gap-2 text-sm text-success">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
+                                            <span>Git initialized - changes will be tracked</span>
+                                        </div>
+                                        <div id="git-status-not-initialized" class="hidden flex-col gap-2">
+                                            <div class="flex items-center gap-2 text-sm text-warning">
+                                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                                </svg>
+                                                <span>Not a git repository - changes won't be tracked</span>
+                                            </div>
+                                            <button id="btn-init-git" class="btn btn-sm btn-outline btn-warning w-full">
+                                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                                                </svg>
+                                                Initialize Git Repository
+                                            </button>
+                                        </div>
+                                        <div id="git-status-error" class="hidden items-center gap-2 text-sm text-error">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                            </svg>
+                                            <span id="git-status-error-message">Error checking git status</span>
+                                        </div>
+                                    </div>
+                                    <label class="label">
+                                        <span class="label-text-alt">Enable rollback for Claude's changes</span>
+                                    </label>
+                                </div>
+
+                                <!-- Notification Refresh -->
+                                <div class="form-control-spaced">
+                                    <label class="label">
+                                        <span class="label-text font-semibold">Notification Refresh</span>
+                                    </label>
+                                    <div class="space-y-2">
+                                        <div class="form-control-spaced">
+                                            <label class="label py-1">
+                                                <span class="label-text text-xs">Refresh Interval</span>
+                                                <span class="label-text-alt text-xs" id="notification-refresh-display">5 minutes</span>
+                                            </label>
+                                            <input type="range" id="notification-refresh" min="0" max="60" value="5" step="1" class="range-styled" />
+                                            <div class="range-labels">
+                                                <span class="range-label-start">Once only</span>
+                                                <span class="range-label-end">60min</span>
+                                            </div>
+                                            <label class="label">
+                                                <span class="label-text-alt text-xs">How often to refresh workspace notifications. Set to 0 to only load once per session.</span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
-                            <div id="git-status-error" class="hidden items-center gap-2 text-sm text-error">
+                        </div>
+                    </div>
+
+                    <!-- Speech & Sound Section -->
+                    <div class="collapse collapse-arrow bg-base-200 border border-base-300">
+                        <input type="checkbox" checked />
+                        <div class="collapse-title text-sm font-semibold">
+                            <div class="flex items-center gap-2">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
                                 </svg>
-                                <span id="git-status-error-message">Error checking git status</span>
+                                Speech & Sound
                             </div>
                         </div>
-                        <label class="label">
-                            <span class="label-text-alt">Enable rollback for Claude's changes</span>
-                        </label>
-                    </div>
-
-                    <!-- STT Engine Selection -->
-                    <div class="form-control-spaced">
-                        <label class="label">
-                            <span class="label-text font-semibold">Speech Recognition Engine</span>
-                        </label>
-                        <div class="space-y-2">
-                            <label class="label cursor-pointer justify-start gap-3">
-                                <input type="radio" name="stt-engine" value="server-whisper" id="stt-server-whisper" class="radio radio-sm" checked />
-                                <div class="flex-1">
-                                    <span class="label-text">Server Whisper</span>
-                                    <div class="flex items-center gap-2 mt-1">
-                                        <span id="server-whisper-status" class="badge badge-ghost badge-xs">Checking...</span>
+                        <div class="collapse-content">
+                            <div class="space-y-4 pt-2">
+                                <!-- STT Engine Selection -->
+                                <div class="form-control-spaced">
+                                    <label class="label">
+                                        <span class="label-text font-semibold">Speech Recognition Engine</span>
+                                    </label>
+                                    <div class="space-y-2">
+                                        <label class="label cursor-pointer justify-start gap-3">
+                                            <input type="radio" name="stt-engine" value="server-whisper" id="stt-server-whisper" class="radio radio-sm" checked />
+                                            <div class="flex-1">
+                                                <span class="label-text">Server Whisper</span>
+                                                <div class="flex items-center gap-2 mt-1">
+                                                    <span id="server-whisper-status" class="badge badge-ghost badge-xs">Checking...</span>
+                                                </div>
+                                            </div>
+                                        </label>
+                                        <label class="label cursor-pointer justify-start gap-3">
+                                            <input type="radio" name="stt-engine" value="browser-speech-api" id="stt-browser-speech-api" class="radio radio-sm" />
+                                            <div class="flex-1">
+                                                <span class="label-text">Browser Speech API</span>
+                                                <div class="flex items-center gap-2 mt-1">
+                                                    <span id="browser-speech-api-status" class="badge badge-ghost badge-xs">Checking...</span>
+                                                </div>
+                                            </div>
+                                        </label>
+                                        <!-- Hidden Android App STT option -->
+                                        <label class="label cursor-pointer justify-start gap-3 android-option-hidden">
+                                            <input type="radio" name="stt-engine" value="android-app" id="stt-android-app" class="radio radio-sm" />
+                                            <div class="flex-1">
+                                                <span class="label-text">Android App</span>
+                                                <div class="flex items-center gap-2 mt-1">
+                                                    <span id="android-app-status" class="badge badge-ghost badge-xs">Connected</span>
+                                                </div>
+                                            </div>
+                                        </label>
                                     </div>
+                                    <label class="label">
+                                        <span class="label-text-alt">Choose your preferred speech-to-text engine</span>
+                                    </label>
                                 </div>
-                            </label>
-                            <label class="label cursor-pointer justify-start gap-3">
-                                <input type="radio" name="stt-engine" value="browser-speech-api" id="stt-browser-speech-api" class="radio radio-sm" />
-                                <div class="flex-1">
-                                    <span class="label-text">Browser Speech API</span>
-                                    <div class="flex items-center gap-2 mt-1">
-                                        <span id="browser-speech-api-status" class="badge badge-ghost badge-xs">Checking...</span>
+
+                                <!-- Sound Effects -->
+                                <div class="form-control">
+                                    <label class="label cursor-pointer justify-start gap-3">
+                                        <input type="checkbox" id="enable-sounds" class="checkbox checkbox-sm" checked />
+                                        <span class="label-text">Enable sound effects</span>
+                                    </label>
+                                </div>
+
+                                <div class="divider my-2"></div>
+
+                                <!-- Keyword Listening -->
+                                <div class="space-y-3">
+                                    <div class="flex items-center gap-2 mb-3">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 4V2a1 1 0 011-1h8a1 1 0 011 1v2m-9 14v-8m4 8v-8m4 8V6" />
+                                        </svg>
+                                        <span class="font-semibold text-sm">Keyword Listening</span>
                                     </div>
-                                </div>
-                            </label>
-                            <!-- Hidden Android App STT option -->
-                            <label class="label cursor-pointer justify-start gap-3 android-option-hidden">
-                                <input type="radio" name="stt-engine" value="android-app" id="stt-android-app" class="radio radio-sm" />
-                                <div class="flex-1">
-                                    <span class="label-text">Android App</span>
-                                    <div class="flex items-center gap-2 mt-1">
-                                        <span id="android-app-status" class="badge badge-ghost badge-xs">Connected</span>
-                                    </div>
-                                </div>
-                            </label>
-                        </div>
-                        <label class="label">
-                            <span class="label-text-alt">Choose your preferred speech-to-text engine</span>
-                        </label>
-                    </div>
 
-                    <!-- Sound Effects -->
-                    <div class="form-control">
-                        <label class="label cursor-pointer justify-start gap-3">
-                            <input type="checkbox" id="enable-sounds" class="checkbox checkbox-sm" checked />
-                            <span class="label-text">Enable sound effects</span>
-                        </label>
-                    </div>
-
-                    <div class="divider my-2"></div>
-
-                    <!-- Keyword Listening -->
-                    <div class="space-y-3">
-                        <div class="flex items-center gap-2 mb-3">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                            </svg>
-                            <span class="font-semibold text-sm">Keyword Listening</span>
-                        </div>
-
-                        <!-- Keyword Variations -->
-                        <div class="form-control-spaced">
-                            <label class="label py-1">
-                                <span class="label-text text-xs">Keywords & Variations</span>
-                            </label>
-                            <textarea id="keyword-input" rows="3" placeholder="hey daisy&#10;he doesn't&#10;hay daisy&#10;hey dazy" class="textarea textarea-bordered text-xs resize-none">hey daisy
+                                    <!-- Keyword Variations -->
+                                    <div class="form-control-spaced">
+                                        <label class="label py-1">
+                                            <span class="label-text text-xs">Keywords & Variations</span>
+                                        </label>
+                                        <textarea id="keyword-input" rows="3" placeholder="hey daisy&#10;he doesn't&#10;hay daisy&#10;hey dazy" class="textarea textarea-bordered text-xs resize-none">hey daisy
 he doesn't
 hay daisy
 hey dazy</textarea>
-                            <label class="label">
-                                <span class="label-text-alt text-xs">Enter keyword variations (one per line). Include common speech recognition mishears.</span>
-                            </label>
-                        </div>
+                                        <label class="label">
+                                            <span class="label-text-alt text-xs">Enter keyword variations (one per line). Include common speech recognition mishears.</span>
+                                        </label>
+                                    </div>
 
-                        <!-- VAD Sensitivity -->
-                        <div class="form-control-spaced">
-                            <label class="label py-1">
-                                <span class="label-text text-xs">VAD Sensitivity</span>
-                                <span class="label-text-alt text-xs" id="vad-sensitivity-display">0.50</span>
-                            </label>
-                            <input type="range" id="vad-sensitivity" min="0.2" max="0.8" value="0.5" step="0.05" class="range-styled" />
-                            <div class="range-labels">
-                                <span class="range-label-start">High</span>
-                                <span class="range-label-end">Low</span>
-                            </div>
-                        </div>
+                                    <!-- VAD Sensitivity -->
+                                    <div class="form-control-spaced">
+                                        <label class="label py-1">
+                                            <span class="label-text text-xs">VAD Sensitivity</span>
+                                            <span class="label-text-alt text-xs" id="vad-sensitivity-display">0.50</span>
+                                        </label>
+                                        <input type="range" id="vad-sensitivity" min="0.2" max="0.8" value="0.5" step="0.05" class="range-styled" />
+                                        <div class="range-labels">
+                                            <span class="range-label-start">High</span>
+                                            <span class="range-label-end">Low</span>
+                                        </div>
+                                    </div>
 
-                        <!-- Recording Timeout -->
-                        <div class="form-control-spaced">
-                            <label class="label py-1">
-                                <span class="label-text text-xs">Recording Timeout</span>
-                                <span class="label-text-alt text-xs" id="recording-timeout-display">2.0s</span>
-                            </label>
-                            <input type="range" id="recording-timeout" min="1.0" max="5.0" value="2.0" step="0.5" class="range-styled" />
-                            <div class="range-labels">
-                                <span class="range-label-start">1s</span>
-                                <span class="range-label-end">5s</span>
-                            </div>
-                        </div>
+                                    <!-- Recording Timeout -->
+                                    <div class="form-control-spaced">
+                                        <label class="label py-1">
+                                            <span class="label-text text-xs">Recording Timeout</span>
+                                            <span class="label-text-alt text-xs" id="recording-timeout-display">2.0s</span>
+                                        </label>
+                                        <input type="range" id="recording-timeout" min="1.0" max="5.0" value="2.0" step="0.5" class="range-styled" />
+                                        <div class="range-labels">
+                                            <span class="range-label-start">1s</span>
+                                            <span class="range-label-end">5s</span>
+                                        </div>
+                                    </div>
 
-                        <!-- Pre-Buffer Duration -->
-                        <div class="form-control-spaced">
-                            <label class="label py-1">
-                                <span class="label-text text-xs">Pre-Buffer Duration</span>
-                                <span class="label-text-alt text-xs" id="buffer-duration-display">750ms</span>
-                            </label>
-                            <input type="range" id="buffer-duration" min="250" max="1500" value="750" step="250" class="range-styled" />
-                            <div class="range-labels">
-                                <span class="range-label-start">250ms</span>
-                                <span class="range-label-end">1500ms</span>
-                            </div>
-                            <label class="label">
-                                <span class="label-text-alt text-xs">Audio captured before speech detection (server mode only). Browser Speech API may miss first syllables.</span>
-                            </label>
-                        </div>
+                                    <!-- Pre-Buffer Duration -->
+                                    <div class="form-control-spaced">
+                                        <label class="label py-1">
+                                            <span class="label-text text-xs">Pre-Buffer Duration</span>
+                                            <span class="label-text-alt text-xs" id="buffer-duration-display">750ms</span>
+                                        </label>
+                                        <input type="range" id="buffer-duration" min="250" max="1500" value="750" step="250" class="range-styled" />
+                                        <div class="range-labels">
+                                            <span class="range-label-start">250ms</span>
+                                            <span class="range-label-end">1500ms</span>
+                                        </div>
+                                        <label class="label">
+                                            <span class="label-text-alt text-xs">Audio captured before speech detection (server mode only). Browser Speech API may miss first syllables.</span>
+                                        </label>
+                                    </div>
 
-                        <!-- Apply Settings -->
-                        <div class="flex gap-1 pt-2">
-                            <button id="btn-apply-keyword-settings" class="btn btn-primary btn-xs flex-1 btn-compact">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="icon-compact" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                                </svg>
-                                Apply
-                            </button>
-                            <button id="btn-reset-keyword-settings" class="btn btn-ghost btn-xs btn-compact">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="icon-compact" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                </svg>
-                                Reset
-                            </button>
-                        </div>
-                    </div>
-
-                    <div class="divider my-2"></div>
-
-                    <!-- Auto-Session Timeout -->
-                    <div class="form-control-spaced">
-                        <label class="label">
-                            <span class="label-text font-semibold">Auto-Session Timeout</span>
-                        </label>
-                        <div class="space-y-2">
-                            <div class="form-control-spaced">
-                                <label class="label py-1">
-                                    <span class="label-text text-xs">Timeout Duration</span>
-                                    <span class="label-text-alt text-xs" id="auto-session-timeout-display">15 minutes</span>
-                                </label>
-                                <input type="range" id="auto-session-timeout" min="0" max="60" value="15" step="1" class="range-styled" />
-                                <div class="range-labels">
-                                    <span class="range-label-start">Disabled</span>
-                                    <span class="range-label-end">60min</span>
+                                    <!-- Apply Settings -->
+                                    <div class="flex gap-1 pt-2">
+                                        <button id="btn-apply-keyword-settings" class="btn btn-primary btn-xs flex-1 btn-compact">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="icon-compact" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                            </svg>
+                                            Apply
+                                        </button>
+                                        <button id="btn-reset-keyword-settings" class="btn btn-ghost btn-xs btn-compact">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="icon-compact" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                            </svg>
+                                            Reset
+                                        </button>
+                                    </div>
                                 </div>
-                                <label class="label">
-                                    <span class="label-text-alt text-xs">Automatically creates a new session after inactivity. Only starts after you speak once. Set to 0 to disable.</span>
-                                </label>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Notification Refresh -->
-                    <div class="form-control-spaced">
-                        <label class="label">
-                            <span class="label-text font-semibold">Notification Refresh</span>
-                        </label>
-                        <div class="space-y-2">
-                            <div class="form-control-spaced">
-                                <label class="label py-1">
-                                    <span class="label-text text-xs">Refresh Interval</span>
-                                    <span class="label-text-alt text-xs" id="notification-refresh-display">5 minutes</span>
-                                </label>
-                                <input type="range" id="notification-refresh" min="0" max="60" value="5" step="1" class="range-styled" />
-                                <div class="range-labels">
-                                    <span class="range-label-start">Once only</span>
-                                    <span class="range-label-end">60min</span>
+                    <!-- Session Section -->
+                    <div class="collapse collapse-arrow bg-base-200 border border-base-300">
+                        <input type="checkbox" checked />
+                        <div class="collapse-title text-sm font-semibold">
+                            <div class="flex items-center gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                Session
+                            </div>
+                        </div>
+                        <div class="collapse-content">
+                            <div class="space-y-4 pt-2">
+                                <!-- Auto-Session Timeout -->
+                                <div class="form-control-spaced">
+                                    <label class="label">
+                                        <span class="label-text font-semibold">Auto-Session Timeout</span>
+                                    </label>
+                                    <div class="space-y-2">
+                                        <div class="form-control-spaced">
+                                            <label class="label py-1">
+                                                <span class="label-text text-xs">Timeout Duration</span>
+                                                <span class="label-text-alt text-xs" id="auto-session-timeout-display">15 minutes</span>
+                                            </label>
+                                            <input type="range" id="auto-session-timeout" min="0" max="60" value="15" step="1" class="range-styled" />
+                                            <div class="range-labels">
+                                                <span class="range-label-start">Disabled</span>
+                                                <span class="range-label-end">60min</span>
+                                            </div>
+                                            <label class="label">
+                                                <span class="label-text-alt text-xs">Automatically creates a new session after inactivity. Only starts after you speak once. Set to 0 to disable.</span>
+                                            </label>
+                                        </div>
+                                    </div>
                                 </div>
-                                <label class="label">
-                                    <span class="label-text-alt text-xs">How often to refresh workspace notifications. Set to 0 to only load once per session.</span>
-                                </label>
+
+                                <div class="divider my-2"></div>
+
+                                <!-- Session Management -->
+                                <div class="space-y-2">
+                                    <button id="btn-new-session" class="btn btn-outline btn-sm w-full">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                                        </svg>
+                                        New Session
+                                    </button>
+                                    <button id="btn-clear-conversation" class="btn btn-outline btn-sm w-full">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                        </svg>
+                                        Clear Conversation
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
-
-                    <div class="divider my-2"></div>
-
-                    <!-- Session Management -->
-                    <div class="space-y-2">
-                        <button id="btn-new-session" class="btn btn-outline btn-sm w-full">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-                            </svg>
-                            New Session
-                        </button>
-                        <button id="btn-clear-conversation" class="btn btn-outline btn-sm w-full">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                            Clear Conversation
-                        </button>
-                    </div>
+                    
                 </div>
             </div>
         </div>
