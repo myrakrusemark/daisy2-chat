@@ -8,17 +8,15 @@ A sophisticated voice-powered assistant that integrates Claude Code API with rea
 - 🤖 **Claude Code Integration**: Full access to Claude's coding capabilities with streaming responses
 - 🔧 **Extensible MCP Servers**: Custom Model Context Protocol servers for enhanced functionality
 - 🌐 **Web Interface**: Modern responsive UI with DaisyUI components
-- 📱 **Cross-Platform**: Works in browsers, supports Android companion app
-- 🔊 **Advanced Audio**: Wake word detection, voice activity detection, and high-quality TTS
+- 🔊 **Advanced Audio**: Keyword detection, voice activity detection, and high-quality TTS
 - 📁 **Workspace Management**: Isolated sessions with custom notifications and configurations
 
 ## Quick Start
 
 ### Prerequisites
 
-- Python 3.10+
-- Node.js 16+ (for frontend build tools)
-- UV package manager (`pip install uv`)
+- Docker and Docker Compose
+- Git
 
 ### Installation
 
@@ -28,10 +26,37 @@ A sophisticated voice-powered assistant that integrates Claude Code API with rea
    cd daisy2
    ```
 
-2. **Install dependencies**
-   ```bash
-   uv sync
-   npm install
+2. **Set up Docker Compose**
+   
+   The project requires a docker-compose.yml file in the parent directory (`~/selfhost/docker-compose.yml`). Add the daisy2 service configuration:
+
+   ```yaml
+   services:
+     daisy2:
+       build: ./daisy2
+       container_name: daisy2
+       ports:
+         - "8001:8000"
+       environment:
+         - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+         - HOST=0.0.0.0
+         - PORT=8000
+         - LOG_LEVEL=${LOG_LEVEL:-INFO}
+         - MAX_SESSIONS=${MAX_SESSIONS:-10}
+         - SESSION_TIMEOUT=${SESSION_TIMEOUT:-3600}
+         - DEFAULT_WORKSPACE=/app/workspace
+         - ALLOWED_WORKSPACE_PATHS=/app/workspace,/app/data
+       volumes:
+         - ./daisy2/data:/app/data:z
+         - ./daisy2/workspace:/app/workspace:z
+       restart: unless-stopped
+       networks:
+         - selfhost
+
+   networks:
+     selfhost:
+       name: selfhost
+       driver: bridge
    ```
 
 3. **Configure environment**
@@ -40,15 +65,23 @@ A sophisticated voice-powered assistant that integrates Claude Code API with rea
    # Edit .env with your API keys (see Configuration section below)
    ```
 
-4. **Start the server**
+4. **Build and start with Docker**
    ```bash
-   npm run dev
+   cd ~/selfhost  # Navigate to parent directory with docker-compose.yml
+   docker-compose up --build -d daisy2
    ```
 
 5. **Open your browser**
    ```
-   http://localhost:8000
+   http://localhost:8001
    ```
+
+### Docker Setup Notes
+
+- The container runs on port 8001 (mapped from internal port 8000)
+- Environment variables can be configured in the `daisy2` service section of `docker-compose.yml`
+- Data persistence is handled through Docker volumes for `/app/data` and `/app/workspace`
+- The container includes all necessary dependencies including Python, Node.js, and Claude Code CLI
 
 ## Configuration
 
@@ -59,9 +92,6 @@ Copy `.env.example` to `.env` and configure:
 ```bash
 # Required: Anthropic API Key
 ANTHROPIC_API_KEY=sk-ant-api03-your-api-key-here
-
-# Optional: Wake word detection
-PICOVOICE_ACCESS_KEY=your-picovoice-access-key-here
 ```
 
 ### Tool Allowlists
@@ -148,15 +178,41 @@ notifications:
 
 #### Docker Integration
 
-Create `workspace/.daisy/docker-compose.override.yml` for custom mounts:
+Create `workspace/.daisy/docker-compose.override.yml` for custom volume mounts:
 
 ```yaml
 version: '3.8'
 services:
   daisy2:
     volumes:
-      - /path/to/your/documents:/workspace/data/documents:ro
-      - /path/to/your/projects:/workspace/projects:rw
+      - /path/to/your/documents:/app/workspace/documents:ro
+      - /path/to/your/projects:/app/workspace/projects:rw
+      - /data/Storage:/app/workspace/storage:ro
+```
+
+This allows Claude to access external directories and files within the workspace. The override file is automatically merged with the main docker-compose.yml when running docker-compose commands like `build`, `up`, or `down`.
+
+**Mount Synchronization Script**
+
+After setting up volume mounts, run the sync script to create matching symlinks in your host workspace:
+
+```bash
+# Run the mount sync script
+./workspace/.daisy/sync-mounts.sh
+```
+
+This script:
+- Reads your `docker-compose.override.yml` volume mounts
+- Creates symlinks in the local workspace that mirror the container's file structure
+- Allows you to see and edit the same files that Claude sees inside the container
+- Automatically handles cleanup of old symlinks when re-run
+
+The workspace will then contain symlinks like:
+```
+workspace/
+├── documents -> /path/to/your/documents
+├── projects -> /path/to/your/projects
+└── storage -> /data/Storage
 ```
 
 ## Development
@@ -192,7 +248,7 @@ pytest tests/              # Python tests
 - **FastAPI Server**: WebSocket-based real-time communication
 - **Session Manager**: Multi-user session isolation and resource monitoring  
 - **Claude Client**: Voice-optimized Claude Code integration
-- **Audio Pipeline**: Multi-engine STT/TTS with wake word detection
+- **Audio Pipeline**: Multi-engine STT/TTS with keyword detection
 
 **Frontend:**
 - **Modern UI**: Tailwind CSS + DaisyUI components
@@ -216,11 +272,30 @@ Priority order (configurable):
 
 ## Deployment
 
-### Docker
+### Docker (Recommended)
+
+The application is designed to run in Docker with all dependencies included:
 
 ```bash
-docker-compose up -d
+# Build and start the container
+docker-compose up --build -d
+
+# View logs
+docker-compose logs -f daisy2
+
+# Rebuild after code changes
+docker-compose build daisy2
+
+# Stop the container
+docker-compose down
 ```
+
+The Docker setup includes:
+- Multi-stage build for optimized image size
+- Health checks with test validation
+- Proper user permissions (non-root)
+- All required dependencies (Python, Node.js, Claude CLI, ffmpeg)
+- Persistent data volumes
 
 ### Manual Deployment
 
@@ -244,10 +319,6 @@ docker-compose up -d
 ## Troubleshooting
 
 ### Common Issues
-
-**Wake word detection not working:**
-- Check `PICOVOICE_ACCESS_KEY` in `.env`
-- Ensure microphone permissions in browser
 
 **Claude responses failing:**
 - Verify `ANTHROPIC_API_KEY` in `.env`  
