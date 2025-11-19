@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 server = Server("drive-schedule")
 
 # Import the shared schedule logic
-from .schedule_logic import calculate_driver
+from schedule_logic import calculate_driver
 
 
 @server.list_tools()
