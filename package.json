@@ -1,5 +1,5 @@
 {
-  "name": "cassistant",
+  "name": "daisy2",
   "version": "1.0.0",
   "description": "A web-based voice AI assistant powered by Claude Code with browser-native speech recognition and text-to-speech.",
   "main": "index.js",

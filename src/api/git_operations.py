@@ -109,7 +109,7 @@ def init_git_repo(directory: Path) -> Dict[str, Any]:
                 timeout=5
             )
             subprocess.run(
-                ["git", "config", "user.email", "claude@cassistant.local"],
+                ["git", "config", "user.email", "claude@daisy2.local"],
                 cwd=str(directory),
                 capture_output=True,
                 timeout=5

@@ -28,9 +28,9 @@ This repository demonstrates how to use **Claude Code programmatically** - treat
 - **`voice_to_claude_code.py`** - Original voice assistant (RealtimeSTT + OpenAI TTS)
 - **`anthropic_search.py`** - Web search CLI with citations
 
-### claude-assistant/ - Fast Voice Assistant
+### daisy2/ - Fast Voice Assistant
 
-**Primary Location**: `/home/myra/claude-assistant/claude-code-is-programmable/claude-assistant/`
+**Primary Location**: `/home/myra/daisy2/claude-code-is-programmable/daisy2/`
 
 - **`voice_to_claude_code_fast.py`** - Enhanced voice assistant with local processing
 - **`start.sh`** - Startup script for fast voice assistant
@@ -61,7 +61,7 @@ NOTION_API_KEY=secret_...              # Optional: for Notion integration exampl
 
 ### Voice Assistant Setup
 
-The fast voice assistant (`claude-assistant/voice_to_claude_code_fast.py`) requires:
+The fast voice assistant (`daisy2/voice_to_claude_code_fast.py`) requires:
 
 1. **Anthropic API Key** - For Claude Code access
 2. **Wake Word Detection** - Uses browser Web Speech API for "hey daisy" detection
@@ -178,7 +178,7 @@ Stored in `output/conversation_YYYYMMDD_HHMMSS.yaml`
 
 ### Fast Voice Assistant (Recommended)
 
-**Location**: `claude-assistant/voice_to_claude_code_fast.py`
+**Location**: `daisy2/voice_to_claude_code_fast.py`
 
 **Features**:
 - Wake word: "Hey Daisy"
@@ -190,7 +190,7 @@ Stored in `output/conversation_YYYYMMDD_HHMMSS.yaml`
 
 **Start Command**:
 ```bash
-cd claude-assistant
+cd daisy2
 ./start.sh
 # OR
 uv run voice_to_claude_code_fast.py
@@ -525,7 +525,7 @@ uv run claude_code_mcp_server.py
 uv run claude_code_mcp_client.py
 
 # Run fast voice assistant
-cd claude-assistant && ./start.sh
+cd daisy2 && ./start.sh
 
 # Run web search
 uv run anthropic_search.py "search query"

@@ -12,6 +12,9 @@ import json
 import os
 from pathlib import Path
 
+# Add current directory to Python path for imports
+sys.path.insert(0, '/app')
+
 
 def check_service_health():
     """Check if the main service is responding"""
@@ -131,7 +134,7 @@ def run_quick_functional_test():
 
 def main():
     """Main health check function"""
-    print("🏥 Docker Health Check - Cassistant")
+    print("🏥 Docker Health Check - Daisy2")
     print("=" * 50)
     
     start_time = time.time()

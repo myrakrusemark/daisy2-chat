@@ -1,5 +1,5 @@
 [project]
-name = "claude-assistant"
+name = "daisy2"
 version = "0.2.0"
 description = "Voice-enabled Claude Code assistant with programmable automation"
 requires-python = ">=3.10"
@@ -46,12 +46,12 @@ dev = [
     "mypy>=1.5.0",
 ]
 all = [
-    "claude-assistant[mcp,dev]",
+    "daisy2[mcp,dev]",
 ]
 
 [project.scripts]
-cassistant-server = "api.server:main"
-cassistant = "api.server:main"
+daisy2-server = "api.server:main"
+daisy2 = "api.server:main"
 
 [build-system]
 requires = ["hatchling"]

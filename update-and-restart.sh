@@ -2,7 +2,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-WORKSPACE_DIR="/home/myra/selfhost/cassistant/workspace"
+WORKSPACE_DIR="/home/myra/selfhost/daisy2/workspace"
 COMPOSE_FILE="$SCRIPT_DIR/docker-compose.yml"
 BUILD_FLAG=""
 
@@ -84,4 +84,4 @@ echo ""
 echo "Container restarted successfully!"
 echo ""
 echo "Verifying mounts in container..."
-docker exec claude-assistant ls -lh /app/workspace/ | grep -E "^[dl-]" | head -20
+docker exec daisy2 ls -lh /app/workspace/ | grep -E "^[dl-]" | head -20

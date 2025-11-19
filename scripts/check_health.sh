@@ -1,14 +1,14 @@
 #!/bin/bash
 #
-# Quick health check script for Cassistant
+# Quick health check script for Daisy2
 # Shows current health status and recent health check results
 #
 
 set -e
 
-CONTAINER_NAME="claude-assistant"
+CONTAINER_NAME="daisy2"
 
-echo "🏥 Cassistant Health Status"
+echo "🏥 Daisy2 Health Status"
 echo "=========================="
 
 # Check if container is running

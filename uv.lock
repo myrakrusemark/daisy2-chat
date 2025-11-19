@@ -242,7 +242,7 @@ wheels = [
 ]
 
 [[package]]
-name = "claude-assistant"
+name = "daisy2"
 version = "0.2.0"
 source = { editable = "." }
 dependencies = [
@@ -292,7 +292,7 @@ mcp = [
 requires-dist = [
     { name = "aiofiles", specifier = ">=23.0.0" },
     { name = "anthropic", specifier = ">=0.40.0" },
-    { name = "claude-assistant", extras = ["mcp", "dev"], marker = "extra == 'all'" },
+    { name = "daisy2", extras = ["mcp", "dev"], marker = "extra == 'all'" },
     { name = "fastapi", specifier = ">=0.109.0" },
     { name = "faster-whisper", specifier = ">=0.10.0" },
     { name = "mcp", specifier = ">=1.0.0" },

@@ -8,7 +8,7 @@ import { Components } from './components.js';
 // Import old modules (make them available globally for now)
 // Note: audio.js, ui-components.js, wake-word.js, websocket.js are loaded via script tags
 
-class CassistantApp {
+class Daisy2App {
   constructor() {
     this.ws = null;
     this.sessionId = null;
@@ -26,7 +26,7 @@ class CassistantApp {
   }
 
   async init() {
-    console.log('🚀 Cassistant initializing...');
+    console.log('🚀 Daisy2 initializing...');
 
     // Initialize audio manager
     this.audio = new window.AudioManager();
@@ -604,5 +604,5 @@ class CassistantApp {
 
 // Initialize app when modules are loaded
 window.addEventListener('load', () => {
-  window.app = new CassistantApp();
+  window.app = new Daisy2App();
 });

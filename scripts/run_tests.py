@@ -61,7 +61,7 @@ def main():
     project_root = Path(__file__).parent.parent
     os.chdir(project_root)
     
-    print("🧪 Running Cassistant Test Suite")
+    print("🧪 Running Daisy2 Test Suite")
     print(f"   Project root: {project_root}")
     
     results = []

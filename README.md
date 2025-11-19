@@ -25,7 +25,7 @@ A sophisticated voice-powered assistant that integrates Claude Code API with rea
 1. **Clone the repository**
    ```bash
    git clone <repository-url>
-   cd claude-assistant
+   cd daisy2
    ```
 
 2. **Install dependencies**
@@ -153,7 +153,7 @@ Create `workspace/.daisy/docker-compose.override.yml` for custom mounts:
 ```yaml
 version: '3.8'
 services:
-  claude-assistant:
+  daisy2:
     volumes:
       - /path/to/your/documents:/workspace/data/documents:ro
       - /path/to/your/projects:/workspace/projects:rw
@@ -270,7 +270,7 @@ python scripts/health_check.py
 1. **Development Setup**
    ```bash
    git clone <repository-url>
-   cd claude-assistant
+   cd daisy2
    uv sync
    npm install
    ```

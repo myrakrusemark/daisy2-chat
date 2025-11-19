@@ -34,7 +34,7 @@ Add to your MCP client configuration (e.g., Claude Desktop config):
   "mcpServers": {
     "weather": {
       "command": "python",
-      "args": ["/home/myra/cassistant/src/mcp/weather_mcp/server.py"]
+      "args": ["/home/myra/daisy2/src/mcp/weather_mcp/server.py"]
     }
   }
 }

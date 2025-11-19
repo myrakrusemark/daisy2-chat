@@ -4,7 +4,7 @@
 version: '3.8'
 
 services:
-  cassistant:
+  daisy2:
     environment:
       # Enable test validation in health check
       - HEALTH_CHECK_RUN_TESTS=true
@@ -23,9 +23,9 @@ services:
   # Optional: Health monitoring service
   health-monitor:
     image: alpine:latest
-    container_name: cassistant-health-monitor
+    container_name: daisy2-health-monitor
     depends_on:
-      - cassistant
+      - daisy2
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     command: |
@@ -35,20 +35,20 @@ services:
           echo "=== Health Check Report $(date) ==="
           
           # Get container health status
-          HEALTH_STATUS=$$(docker inspect cassistant --format="{{.State.Health.Status}}")
+          HEALTH_STATUS=$$(docker inspect daisy2 --format="{{.State.Health.Status}}")
           echo "Container Health: $$HEALTH_STATUS"
           
           if [ "$$HEALTH_STATUS" = "healthy" ]; then
-            echo "✅ Cassistant is healthy"
+            echo "✅ Daisy2 is healthy"
           elif [ "$$HEALTH_STATUS" = "unhealthy" ]; then
-            echo "❌ Cassistant is unhealthy - checking logs..."
-            docker logs --tail=10 cassistant
+            echo "❌ Daisy2 is unhealthy - checking logs..."
+            docker logs --tail=10 daisy2
             
             # Get detailed health check logs
             echo "Health check details:"
-            docker inspect cassistant --format="{{range .State.Health.Log}}{{.Output}}{{end}}" | tail -1
+            docker inspect daisy2 --format="{{range .State.Health.Log}}{{.Output}}{{end}}" | tail -1
           else
-            echo "⏳ Cassistant health status: $$HEALTH_STATUS"
+            echo "⏳ Daisy2 health status: $$HEALTH_STATUS"
           fi
           
           echo "==========================================\n"
