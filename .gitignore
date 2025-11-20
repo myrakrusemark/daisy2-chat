@@ -117,3 +117,10 @@ workspace/.mcp.json
 workspace/claude.md
 workspace/.daisy/notifications.yml
 workspace/.daisy/docker-compose.override.yml
+
+# Personal workspace mount symlinks (from sync-mounts.sh)
+workspace/*.md
+workspace/data/
+workspace/documents/
+workspace/projects/
+workspace/storage/

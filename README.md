@@ -190,7 +190,16 @@ services:
       - /data/Storage:/app/workspace/storage:ro
 ```
 
-This allows Claude to access external directories and files within the workspace. The override file is automatically merged with the main docker-compose.yml when running docker-compose commands like `build`, `up`, or `down`.
+This allows Claude to access external directories and files within the workspace. 
+
+**Important**: The override file must be accessible from the directory containing your main `docker-compose.yml`. Create a symlink:
+
+```bash
+# From your selfhost directory (parent of daisy2)
+ln -s daisy2/workspace/.daisy/docker-compose.override.yml docker-compose.override.yml
+```
+
+The override file is automatically merged with the main docker-compose.yml when running docker-compose commands like `build`, `up`, or `down`.
 
 **Mount Synchronization Script**
 
